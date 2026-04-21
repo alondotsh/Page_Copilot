@@ -31,7 +31,7 @@ Page Copilot by Alon 是一个面向网页阅读、总结和跨页面研究的 C
 1. 克隆仓库
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/alondotsh/Page_Copilot.git
 cd Page_Copilot
 ```
 

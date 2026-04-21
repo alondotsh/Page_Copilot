@@ -34,7 +34,7 @@ The extension is built on Manifest V3 and supports bring-your-own model APIs, so
 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/alondotsh/Page_Copilot.git
 cd Page_Copilot
 ```
 
