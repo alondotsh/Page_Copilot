@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page Copilot by Alon</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="api-status">
+        <span id="apiStatus" class="status-dot"></span>
+        <button id="settingsBtn" class="icon-btn" title="Settings">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Settings panel -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <h3>API Settings</h3>
+      <div class="form-group">
+        <label for="apiProvider">API Provider:</label>
+        <select id="apiProvider">
+          <option value="claude">Anthropic Claude</option>
+          <option value="glm">Zhipu GLM</option>
+        </select>
+        <small>Switching providers will automatically load the matching configuration.</small>
+      </div>
+      <div class="form-group">
+        <label for="apiKey">API Key:</label>
+        <input type="password" id="apiKey" placeholder="Enter API key">
+      </div>
+      <div class="form-group">
+        <label for="apiUrl">API URL:</label>
+        <input type="text" id="apiUrl" placeholder="API URL">
+        <small>Change this if you use a compatible proxy or custom endpoint.</small>
+      </div>
+      <div class="form-group">
+        <label for="model">Chat Model:</label>
+        <select id="model">
+          <!-- Populated dynamically based on the selected provider -->
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="translateModel">Translation Model:</label>
+        <select id="translateModel">
+          <!-- Populated dynamically based on the selected provider -->
+        </select>
+        <small>This model is used for full-page translation.</small>
+      </div>
+      <div class="form-group">
+        <label for="translateBatchSize">Translation Batch Size:</label>
+        <select id="translateBatchSize">
+          <option value="15">15 paragraphs / batch (stable)</option>
+          <option value="30" selected>30 paragraphs / batch (recommended)</option>
+          <option value="50">50 paragraphs / batch (fast)</option>
+          <option value="80">80 paragraphs / batch (maximum speed)</option>
+        </select>
+        <small>More paragraphs per batch means faster translation, but higher request size.</small>
+      </div>
+      <div class="form-group">
+        <label for="systemPrompt">Custom Instructions (System Prompt):</label>
+        <textarea id="systemPrompt" rows="3" placeholder="Example: You are a Python coding assistant. Keep answers concise and practical..."></textarea>
+      </div>
+      <div class="form-group">
+        <label for="contextPageCount">Context Pages:</label>
+        <select id="contextPageCount">
+          <option value="0">Off (do not send browsing context)</option>
+          <option value="5">5 pages</option>
+          <option value="10" selected>10 pages (recommended)</option>
+          <option value="20">20 pages</option>
+          <option value="30">30 pages</option>
+        </select>
+        <small>The assistant can remember recently visited pages for follow-up questions.</small>
+      </div>
+      <div class="form-group">
+        <label for="retentionHours">Conversation Retention:</label>
+        <select id="retentionHours">
+          <option value="24">24 hours</option>
+          <option value="48" selected>48 hours (recommended)</option>
+          <option value="72">3 days</option>
+          <option value="168">7 days</option>
+          <option value="0">Never clear automatically</option>
+        </select>
+        <small>Messages older than this will be removed automatically.</small>
+      </div>
+      <button id="saveSettings" class="btn btn-primary">Save Settings</button>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="quick-actions">
+      <button id="summarizeBtn" class="btn btn-action">📄 Summarize Page</button>
+      <button id="translateBtn" class="btn btn-action">🌐 Translate Selection</button>
+      <button id="explainBtn" class="btn btn-action">💡 Explain Selection</button>
+      <button id="historyBtn" class="btn btn-action">📋 Page History</button>
+      <button id="translatePageBtn" class="btn btn-action btn-full">🌍 Translate Entire Page</button>
+    </div>
+
+    <!-- Page history panel -->
+    <div id="historyPanel" class="history-panel hidden">
+      <div class="history-header">
+        <span>Recently Viewed Pages</span>
+        <button id="closeHistoryBtn" class="close-btn">✕</button>
+      </div>
+      <div id="historyList" class="history-list">
+        <!-- Filled dynamically -->
+      </div>
+      <div class="history-tip">💡 Click a number to insert it into the input box, or ask the AI to compare page 1 and page 2.</div>
+    </div>
+
+    <!-- Conversation area -->
+    <div id="chatContainer" class="chat-container">
+      <div id="messages" class="messages">
+        <div class="message assistant">
+          <div class="message-content">
+            <p>Hello, I'm <strong>Page Copilot by Alon</strong>. I'm especially good at two things:</p>
+            <ul>
+              <li>📄 Summarizing the current page and answering follow-up questions grounded in its content</li>
+              <li>🔍 Comparing recently visited pages, articles, products, or viewpoints</li>
+            </ul>
+            <p>🌐 I can also translate selected text or explain tricky passages along the way.</p>
+            <p>Use the buttons above or type a question to get started, for example: <em>"Summarize the key points on this page"</em> or <em>"Compare the core differences between page 1 and page 2"</em>.</p>
+            <div class="feedback-card">
+              <div class="feedback-copy">
+                <p><strong>Feedback & Suggestions</strong></p>
+                <p>Claude and GLM are included by default, and you can extend the provider list to match your own workflow.</p>
+                <p>If you run into issues or have ideas for improvement, join the conversation on GitHub:</p>
+                <p><a href="https://github.com/alondotsh/Page_Copilot" target="_blank" rel="noreferrer">github.com/alondotsh/Page_Copilot</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input area -->
+    <div class="input-area">
+      <textarea id="userInput" placeholder="Ask something like: summarize this page, or compare page 1 and page 2..." rows="3"></textarea>
+      <button id="sendBtn" class="btn btn-send">Send</button>
+      <button id="clearBtn" class="btn btn-clear">Clear</button>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+
+</html>

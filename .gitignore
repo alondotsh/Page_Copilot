@@ -1,0 +1,40 @@
+# Dependencies
+resume.md
+node_modules/
+
+# Build output
+.build/
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.pre_*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Cache
+.ntm/
+.cache/
+
+# Release artifacts
+chrome-web-store/*.zip

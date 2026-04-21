@@ -1,0 +1,284 @@
+/* 浮动工具栏样式 */
+.ai-floating-toolbar {
+  position: absolute;
+  z-index: 999999;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  padding: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
+.ai-floating-toolbar.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: all;
+  cursor: grab;
+}
+
+/* 拖拽状态 */
+.ai-floating-toolbar.dragging {
+  cursor: grabbing !important;
+  user-select: none;
+  transform: none !important;
+  transition: none !important;
+}
+
+.ai-floating-toolbar.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.ai-toolbar-no-select,
+.ai-toolbar-no-select * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.ai-floating-toolbar button {
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #333;
+  font-weight: 500;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ai-floating-toolbar button:hover {
+  background: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.ai-floating-toolbar button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 按钮图标 */
+.ai-floating-toolbar button::before {
+  font-size: 16px;
+}
+
+/* 分隔线 */
+.ai-floating-toolbar .divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.3);
+  margin: 4px 2px;
+}
+
+/* 工具提示 */
+.ai-floating-toolbar button[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 加载状态 */
+.ai-floating-toolbar button.loading {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.ai-floating-toolbar button.loading::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #667eea;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-left: 4px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 成功提示 */
+.ai-floating-toolbar-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 9999999;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  white-space: pre-line; /* 支持换行符 */
+  max-width: 400px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.ai-floating-toolbar-toast.show {
+  opacity: 1;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ai-floating-toolbar {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ai-floating-toolbar button {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* ==================== 整页翻译样式（行内模式，类似沉浸式翻译） ==================== */
+
+/* 已翻译的原文 - 保持原样 */
+.ai-translated {
+  /* 不改变原文样式 */
+}
+
+/* 翻译结果（行内显示） */
+.ai-translation {
+  display: block;
+  color: #4361ee;
+  font-size: 0.95em;
+  line-height: 1.6;
+  margin-top: 2px;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* 翻译进度条 */
+.ai-translation-progress {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  padding: 16px 20px;
+  z-index: 9999999;
+  min-width: 280px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.ai-translation-progress.fade-out {
+  opacity: 0;
+  transform: translateX(20px);
+  transition: all 0.3s ease;
+}
+
+.ai-translation-progress .progress-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-translation-progress .progress-icon {
+  font-size: 24px;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.ai-translation-progress .progress-text {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.ai-translation-progress .progress-count {
+  color: #667eea;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ai-translation-progress .progress-close {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: auto;
+  transition: color 0.2s;
+}
+
+.ai-translation-progress .progress-close:hover {
+  color: #e74c3c;
+}
+
+.ai-translation-progress .progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.ai-translation-progress .progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.ai-translation-progress .progress-model {
+  width: 100%;
+  font-size: 11px;
+  color: #888;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #eee;
+}
+
+.ai-translation-progress .progress-model strong {
+  color: #667eea;
+}
