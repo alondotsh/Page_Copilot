@@ -82,7 +82,6 @@ Page_Copilot/
 
 - [docs/troubleshooting.md](docs/troubleshooting.md)：英文版故障排查文档
 - [docs/maintainer-icons.md](docs/maintainer-icons.md)：英文版维护者图标与素材说明
-- [chrome-web-store/STORE_LISTING.md](chrome-web-store/STORE_LISTING.md)：Chrome 商店上架文案
 - [CONTRIBUTING.md](CONTRIBUTING.md)：协作、提问和提交 PR 的方式
 
 ## 🔒 隐私

@@ -85,7 +85,6 @@ Page_Copilot/
 
 - [docs/troubleshooting.md](docs/troubleshooting.md): troubleshooting common issues
 - [docs/maintainer-icons.md](docs/maintainer-icons.md): maintainer notes for icons and promo assets
-- [chrome-web-store/STORE_LISTING.md](chrome-web-store/STORE_LISTING.md): Chrome Web Store listing copy
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribution workflow and PR guidance
 
 ## 🔒 Privacy
