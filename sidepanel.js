@@ -707,16 +707,21 @@ async function callClaudeStream(userMessage, onChunk, onDone, onError) {
     return;
   }
 
+  const customInstructionText = (config.systemPrompt || '').trim();
+  const finalUserMessage = customInstructionText
+    ? `[Custom instructions - higher priority]\n${customInstructionText}\n\nPlease follow the custom instructions above for this reply.\n\n[User request]\n${userMessage}`
+    : userMessage;
+
   const messages = [
     ...conversationHistory,
-    { role: 'user', content: userMessage }
+    { role: 'user', content: finalUserMessage }
   ];
 
   // Build the system prompt with page context
   const pageContext = await buildPageContext();
   const enhancedConfig = {
     ...config,
-    systemPrompt: (config.systemPrompt || '') + pageContext
+    systemPrompt: [customInstructionText, pageContext.trim()].filter(Boolean).join('\n\n')
   };
 
   const port = chrome.runtime.connect({ name: 'claude-stream' });
@@ -850,7 +855,7 @@ async function handleSummarize() {
 
   let text = pageContent.text;
   if (text.length > 10000) text = text.substring(0, 10000) + '\n\n[Content too long, truncated...]';
-  const prompt = `Please summarize the following webpage.\n\nPage title: ${pageContent.title}\n\nContent:\n${text}\n\nSummarize the main ideas, key details, and notable takeaways in English.`;
+  const prompt = `Please summarize the following webpage.\n\nPage title: ${pageContent.title}\n\nContent:\n${text}\n\nSummarize the main ideas, key details, and notable takeaways. Respect any higher-priority custom instructions for the response language. If no language preference is provided, respond in English.`;
 
   addMessage('📄 Summarize this page', 'user');
 
@@ -966,7 +971,7 @@ async function handleExplain() {
     return;
   }
 
-  const prompt = `Explain the following content in clear English:\n\n${selectedText}`;
+  const prompt = `Explain the following content clearly. Respect any higher-priority custom instructions for the response language. If no language preference is provided, respond in English.\n\n${selectedText}`;
   addMessage(`💡 Explain: ${selectedText.substring(0, 100)}...`, 'user');
 
   setButtonsDisabled(true);
