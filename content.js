@@ -601,15 +601,51 @@ const TRANSLATABLE_SELECTORS = 'p, h1, h2, h3, h4, h5, h6, blockquote, figcaptio
 // 排除的元素选择器
 const EXCLUDE_SELECTORS = 'script, style, noscript, iframe, code, pre, .ai-translation, .ai-floating-toolbar, input, textarea, select, nav, header, footer, aside, .sidebar, .menu, .nav, .advertisement, .ad, .comment, .comments';
 
-// 获取翻译配置（使用专用翻译模型）
+/**
+ * Build the fallback translation configuration for a provider.
+ * @param {string} provider Active provider id.
+ * @returns {{apiUrl: string, model: string, batchSize: number}} Default translation settings.
+ */
+function getDefaultTranslationConfig(provider) {
+  if (provider === 'glm') {
+    return {
+      apiUrl: 'https://open.bigmodel.cn/api/anthropic',
+      model: 'glm-4.7',
+      batchSize: 30
+    };
+  }
+
+  return {
+    apiUrl: 'https://api.anthropic.com',
+    model: 'claude-3-5-haiku-20241022',
+    batchSize: 30
+  };
+}
+
+/**
+ * Read the active provider configuration used by full-page translation.
+ * @returns {Promise<{apiKey: string, apiUrl: string, model: string, batchSize: number}>} Translation configuration.
+ */
 async function getTranslationConfig() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['apiKey', 'apiUrl', 'translateModel', 'translateBatchSize'], (result) => {
+    chrome.storage.local.get([
+      'currentProvider',
+      'claudeConfig',
+      'glmConfig',
+      'apiKey',
+      'apiUrl',
+      'translateModel',
+      'translateBatchSize'
+    ], (result) => {
+      const provider = result.currentProvider || 'claude';
+      const providerConfig = provider === 'glm' ? result.glmConfig : result.claudeConfig;
+      const defaults = getDefaultTranslationConfig(provider);
+
       resolve({
-        apiKey: result.apiKey || '',
-        apiUrl: result.apiUrl || 'https://api.anthropic.com',
-        model: result.translateModel || 'claude-3-5-haiku-20241022',  // 默认用 Haiku 提速
-        batchSize: parseInt(result.translateBatchSize) || 15
+        apiKey: providerConfig?.apiKey || result.apiKey || '',
+        apiUrl: providerConfig?.apiUrl || result.apiUrl || defaults.apiUrl,
+        model: providerConfig?.translateModel || result.translateModel || defaults.model,
+        batchSize: parseInt(providerConfig?.translateBatchSize || result.translateBatchSize, 10) || defaults.batchSize
       });
     });
   });
@@ -620,7 +656,9 @@ function getModelDisplayName(modelId) {
   const modelNames = {
     'claude-3-5-haiku-20241022': 'Haiku',
     'claude-sonnet-4-20250514': 'Sonnet 4',
-    'claude-opus-4-20250514': 'Opus 4'
+    'claude-opus-4-20250514': 'Opus 4',
+    'glm-4.7': 'GLM-4.7',
+    'glm-4.5-air': 'GLM-4.5 Air'
   };
   return modelNames[modelId] || modelId;
 }

@@ -96,10 +96,12 @@ const MODEL_CONFIG = {
     models: {
       chat: [
         { value: 'glm-4.7', label: 'GLM-4.7 (recommended)' },
+        { value: 'glm-4.5-air', label: 'GLM-4.5 Air (fast)' },
         { value: '', label: 'Default (use API default model)' }
       ],
       translate: [
-        { value: 'glm-4.7', label: 'GLM-4.7' }
+        { value: 'glm-4.7', label: 'GLM-4.7' },
+        { value: 'glm-4.5-air', label: 'GLM-4.5 Air (fast)' }
       ]
     }
   }
