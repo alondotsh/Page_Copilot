@@ -76,7 +76,6 @@ Page_Copilot/
 ├── floating-toolbar.css
 ├── assets/
 ├── docs/
-├── chrome-web-store/
 ├── PRIVACY.md
 ├── LICENSE
 ├── README.md
@@ -85,7 +84,6 @@ Page_Copilot/
 
 - `assets/`：扩展运行时资源
 - `docs/`：详细使用与开发文档
-- `chrome-web-store/`：Chrome 商店截图、宣传图和上架文案
 
 ## 🛠️ 技术说明
 
@@ -97,7 +95,6 @@ Page_Copilot/
 ## 📚 文档
 
 - [docs/troubleshooting.md](docs/troubleshooting.md)：英文版故障排查文档
-- [docs/maintainer-icons.md](docs/maintainer-icons.md)：英文版维护者图标与素材说明
 - [CONTRIBUTING.md](CONTRIBUTING.md)：协作、提问和提交 PR 的方式
 
 ## 🔒 隐私
@@ -117,9 +114,7 @@ MIT License
 ## 🙋 反馈
 
 - 当前默认支持智谱模型；如需接入其他模型，可继续扩展提供商配置
-- Bug 反馈优先通过仓库 Issues 处理
-- 使用问题、想法讨论和开放式交流优先通过仓库 Discussions 处理
+- Bug 反馈、使用问题和功能建议：https://github.com/alondotsh/Page_Copilot/issues
 - 关注更新或非正式反馈：
 - X：@alondotsh
 - 微信公众号：alondotsh
-- 仓库发布后，可将这里替换为具体的 GitHub Issues / Discussions 链接

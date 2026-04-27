@@ -79,7 +79,6 @@ Page_Copilot/
 ├── floating-toolbar.css
 ├── assets/
 ├── docs/
-├── chrome-web-store/
 ├── PRIVACY.md
 ├── LICENSE
 ├── README.md
@@ -88,7 +87,6 @@ Page_Copilot/
 
 - `assets/`: runtime resources for the extension
 - `docs/`: detailed usage and maintenance documentation
-- `chrome-web-store/`: Chrome Web Store screenshots, promo assets, and listing copy
 
 ## 🛠️ Technical Notes
 
@@ -100,7 +98,6 @@ Page_Copilot/
 ## 📚 Documentation
 
 - [docs/troubleshooting.md](docs/troubleshooting.md): troubleshooting common issues
-- [docs/maintainer-icons.md](docs/maintainer-icons.md): maintainer notes for icons and promo assets
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribution workflow and PR guidance
 
 ## 🔒 Privacy
@@ -120,9 +117,7 @@ See [LICENSE](LICENSE) for the full license text.
 ## 🙋 Feedback
 
 - Claude and GLM are configured by default, and you can extend the provider list if needed
-- Use repository Issues for bug reports
-- Use Discussions for usage questions, ideas, and open-ended product feedback
+- Bug reports, usage questions, and feature requests: https://github.com/alondotsh/Page_Copilot/issues
 - For updates or informal feedback:
 - X: @alondotsh
 - WeChat Official Account: alondotsh
-- Replace these placeholders with the final Issues / Discussions links after the repository is published
