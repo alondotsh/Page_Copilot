@@ -550,15 +550,20 @@ async function getVideoTranscriptContent(tab) {
     return null;
   }
 
+  const hostname = new URL(tab.url).hostname;
+  const injectionWorld = hostname.includes('youtube.com') ? 'MAIN' : 'ISOLATED';
+
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['video-transcript.js']
+      files: ['video-transcript.js'],
+      world: injectionWorld
     });
 
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => window.PageCopilotTranscript?.extractVideoTranscriptContent?.() || null
+      func: () => window.PageCopilotTranscript?.extractVideoTranscriptContent?.() || null,
+      world: injectionWorld
     });
 
     return result?.result || null;

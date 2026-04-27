@@ -283,6 +283,70 @@ function parseYouTubeXmlTranscript(xmlText) {
 }
 
 /**
+ * Extract plain text from YouTube renderer runs.
+ * @param {object|null} textRenderer YouTube text renderer object.
+ * @returns {string} Combined text.
+ */
+function readYouTubeRendererText(textRenderer) {
+  if (!textRenderer) return '';
+  if (textRenderer.simpleText) return textRenderer.simpleText;
+  return (textRenderer.runs || [])
+    .map((run) => run.text || '')
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Read the transcript segment list embedded in YouTube's transcript panel.
+ * Some videos expose a transcript panel while their timedtext URL returns an
+ * empty body, so this is a necessary fallback after caption track fetching.
+ * @param {object} initialData YouTube initial data object.
+ * @returns {object[]} Raw transcript segment entries.
+ */
+function getYouTubeTranscriptPanelSegments(initialData) {
+  const panels = initialData?.engagementPanels || [];
+  const transcriptPanel = panels.find((panel) => {
+    const section = panel?.engagementPanelSectionListRenderer;
+    return section?.panelIdentifier === 'engagement-panel-searchable-transcript'
+      || section?.targetId === 'engagement-panel-searchable-transcript'
+      || section?.content?.transcriptRenderer;
+  });
+
+  return transcriptPanel
+    ?.engagementPanelSectionListRenderer
+    ?.content
+    ?.transcriptRenderer
+    ?.content
+    ?.transcriptSearchPanelRenderer
+    ?.body
+    ?.transcriptSegmentListRenderer
+    ?.initialSegments || [];
+}
+
+/**
+ * Convert YouTube transcript panel segments into timed subtitle cues.
+ * @param {object} initialData YouTube initial data object.
+ * @returns {{startMs: number, endMs: number, text: string}[]} Timed subtitle cues.
+ */
+function parseYouTubeTranscriptPanelCues(initialData) {
+  return getYouTubeTranscriptPanelSegments(initialData).map((item) => {
+    const segment = item.transcriptSegmentRenderer;
+    if (!segment) return null;
+
+    const startMs = Number(segment.startMs) || 0;
+    const endMs = Number(segment.endMs) || startMs + 1;
+    const text = readYouTubeRendererText(segment.snippet);
+
+    return {
+      startMs,
+      endMs: endMs > startMs ? endMs : startMs + 1,
+      text
+    };
+  }).filter((cue) => cue?.text);
+}
+
+/**
  * Pick a useful caption track from a YouTube player response.
  * @param {object} playerResponse YouTube initial player response.
  * @returns {object|null} Caption track metadata.
@@ -409,20 +473,56 @@ async function fetchYouTubeCaptionPayload(track) {
 }
 
 /**
+ * Fetch readable text and download metadata from YouTube's transcript panel.
+ * @param {object} initialData YouTube initial data object.
+ * @param {string} language Preferred language code.
+ * @returns {object|null} Transcript payload, or null when unavailable.
+ */
+function fetchYouTubeTranscriptPanelPayload(initialData, language) {
+  const cues = parseYouTubeTranscriptPanelCues(initialData);
+  const text = cues
+    .map((cue) => cue.text)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!text) return null;
+
+  return {
+    text,
+    download: buildTranscriptDownload({
+      platform: 'YouTube',
+      title: document.title,
+      language,
+      body: buildWebVtt(cues)
+    })
+  };
+}
+
+/**
  * Fetch transcript text for the current YouTube video when captions are available.
  * @returns {Promise<object|null>} Transcript content object, or null when unavailable.
  */
 async function extractYouTubeTranscriptContent() {
   const videoId = getYouTubeVideoId();
-  let playerResponse = readInlineJsonObject(['ytInitialPlayerResponse =', 'ytInitialPlayerResponse=']);
+  let playerResponse = window.ytInitialPlayerResponse
+    || readInlineJsonObject(['ytInitialPlayerResponse =', 'ytInitialPlayerResponse=']);
   let track = selectYouTubeCaptionTrack(playerResponse);
+  let selectedLanguage = track?.languageCode || '';
   let payload = await fetchYouTubeCaptionPayload(track);
 
   if (!payload?.text) {
     const androidPlayerResponse = await fetchYouTubeAndroidPlayerResponse(videoId);
     playerResponse = androidPlayerResponse || playerResponse;
     track = selectYouTubeCaptionTrack(playerResponse);
+    selectedLanguage = track?.languageCode || selectedLanguage;
     payload = await fetchYouTubeCaptionPayload(track);
+  }
+
+  if (!payload?.text) {
+    const initialData = window.ytInitialData
+      || readInlineJsonObject(['ytInitialData =', 'ytInitialData=']);
+    payload = fetchYouTubeTranscriptPanelPayload(initialData, selectedLanguage);
   }
 
   if (!payload?.text) return null;
@@ -435,7 +535,7 @@ async function extractYouTubeTranscriptContent() {
     excerpt: payload.text.substring(0, 500) + (payload.text.length > 500 ? '...' : ''),
     contentType: 'videoTranscript',
     sourceName: 'YouTube captions',
-    language: track.languageCode || '',
+    language: selectedLanguage,
     download: payload.download
   };
 }

@@ -2,23 +2,24 @@
 
 # 📄 Page Copilot by Alon
 
-Page Copilot by Alon 是一个面向网页阅读、总结和跨页面研究的 Chrome 扩展。
+Page Copilot by Alon 是一个用 AI 对比网页和视频内容的 Chrome 扩展。
 
-它聚焦两类核心任务：
+它聚焦三类核心任务：
 
-- 总结当前页面，并基于页面内容继续追问
 - 引用最近浏览的页面，做跨页面比较、归纳和判断
+- 总结当前页面，并基于页面内容继续追问
+- 在字幕可读时，通过 YouTube 和 Bilibili 字幕理解视频内容
 
-扩展采用 Manifest V3，支持自带模型 API，不绑定单一浏览器或模型生态。
+扩展开源、本地优先，采用 Manifest V3，目前支持自带 Claude 或智谱 GLM API Key，后续可继续扩展更多提供商。
 
 ## ✨ 功能
 
+- **跨页面比较**：引用最近访问的页面，对比文章、产品、观点或方案
 - **页面总结与追问**：快速提取当前页面内容，继续围绕该页面多轮对话
 - **视频字幕总结**：在 YouTube 或 Bilibili 视频页存在字幕时，优先总结字幕内容；B 站账号可读取到的 AI 字幕也会纳入支持，并提供带时间轴的字幕下载入口
-- **跨页面比较**：引用最近访问的页面，对比文章、产品、观点或方案
 - **选中即翻译 / 解释**：对局部文本做即时翻译和解释
 - **浮动工具栏**：选中文本后直接复制、翻译、提问或导出 PDF
-- **自带模型 API**：可配置不同模型提供商和兼容接口
+- **自带模型 API**：可配置 Claude 或智谱 GLM 的 API Key，后续可继续扩展更多提供商
 
 ## 🚀 快速开始
 
@@ -28,6 +29,14 @@ Page Copilot by Alon 是一个面向网页阅读、总结和跨页面研究的 C
 - 可用的模型 API Key
 
 ### 安装
+
+#### 方式一：Chrome Web Store
+
+从 Chrome Web Store 安装已发布版本：
+
+https://chromewebstore.google.com/detail/page-copilot-by-alon/adbompcgkenehcjfpacopbdadcoomppa
+
+#### 方式二：开发者模式
 
 1. 克隆仓库
 
@@ -110,4 +119,7 @@ MIT License
 - 当前默认支持智谱模型；如需接入其他模型，可继续扩展提供商配置
 - Bug 反馈优先通过仓库 Issues 处理
 - 使用问题、想法讨论和开放式交流优先通过仓库 Discussions 处理
+- 关注更新或非正式反馈：
+- X：@alondotsh
+- 微信公众号：alondotsh
 - 仓库发布后，可将这里替换为具体的 GitHub Issues / Discussions 链接

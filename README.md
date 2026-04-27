@@ -2,13 +2,14 @@
 
 # 📄 Page Copilot by Alon
 
-Page Copilot by Alon is a Chrome extension for webpage reading, summarization, and cross-page research.
+Page Copilot by Alon is a Chrome extension for comparing webpages and videos across tabs with AI.
 
-It focuses on two core workflows:
-- Summarize the current page and continue asking follow-up questions grounded in its content
+It focuses on three core workflows:
 - Reference recently visited pages to compare articles, products, viewpoints, or decisions
+- Summarize the current page and continue asking follow-up questions grounded in its content
+- Understand YouTube and Bilibili videos through readable transcripts when captions are available
 
-The extension is built on Manifest V3 and supports bring-your-own model APIs, so you are not locked into a single browser or model ecosystem.
+The extension is open-source, local-first, built on Manifest V3, and currently supports Claude and Zhipu GLM with your own API key. More providers can be added over time.
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome)
 ![Bring Your Model](https://img.shields.io/badge/Model-Bring%20Your%20Own-0f766e)
@@ -16,12 +17,12 @@ The extension is built on Manifest V3 and supports bring-your-own model APIs, so
 
 ## ✨ Features
 
+- **Cross-page comparison**: compare recently visited articles, products, viewpoints, or options
 - **Page summaries and follow-up Q&A**: extract the key ideas from the current page and keep asking grounded questions
 - **Video transcript summaries**: summarize YouTube captions and Bilibili subtitles, including readable AI subtitles when the page/account exposes them, with a timed-transcript download option
-- **Cross-page comparison**: compare recently visited articles, products, viewpoints, or options
 - **Translate / explain selected text**: work on a specific passage without leaving the page
 - **Floating toolbar**: copy, translate, ask, or export selected text to PDF directly from the webpage
-- **Bring your own model API**: configure different providers or compatible endpoints
+- **Bring your own model API**: configure Claude or Zhipu GLM with your own API key; more providers can be added over time
 
 ## 🚀 Quick Start
 
@@ -31,6 +32,14 @@ The extension is built on Manifest V3 and supports bring-your-own model APIs, so
 - A valid model API key
 
 ### Installation
+
+#### Option 1: Chrome Web Store
+
+Install the published extension from the Chrome Web Store:
+
+https://chromewebstore.google.com/detail/page-copilot-by-alon/adbompcgkenehcjfpacopbdadcoomppa
+
+#### Option 2: Developer Mode
 
 1. Clone the repository
 
@@ -113,4 +122,7 @@ See [LICENSE](LICENSE) for the full license text.
 - Claude and GLM are configured by default, and you can extend the provider list if needed
 - Use repository Issues for bug reports
 - Use Discussions for usage questions, ideas, and open-ended product feedback
+- For updates or informal feedback:
+- X: @alondotsh
+- WeChat Official Account: alondotsh
 - Replace these placeholders with the final Issues / Discussions links after the repository is published

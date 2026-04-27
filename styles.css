@@ -436,7 +436,7 @@ body {
 
 .feedback-card {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
   margin-top: 10px;

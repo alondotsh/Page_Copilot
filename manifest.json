@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Page Copilot by Alon",
-  "version": "1.0.0",
-  "description": "Summarize pages, ask follow-up questions, and compare content across tabs with your preferred AI model.",
+  "version": "1.1.0",
+  "description": "Compare webpages and videos across tabs with AI, then summarize and ask follow-up questions with your own API key.",
   "permissions": [
     "sidePanel",
     "activeTab",
