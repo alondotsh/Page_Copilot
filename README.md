@@ -44,6 +44,12 @@ cd Page_Copilot
 4. Click **Load unpacked**
 5. Select this project directory
 
+### Releases and Chrome Web Store
+
+The `main` branch contains the latest public source code. Chrome Web Store releases may lag behind GitHub because each store update goes through review.
+
+For installable snapshots submitted to the Chrome Web Store, see GitHub Releases.
+
 ### Configuration
 
 1. Click the extension icon to open the side panel

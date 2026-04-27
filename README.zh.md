@@ -41,6 +41,12 @@ cd Page_Copilot
 4. 点击“加载已解压的扩展程序”
 5. 选择当前项目目录
 
+### 版本与 Chrome 商店
+
+`main` 分支包含最新公开源码。Chrome 商店版本可能因为审核流程暂时落后于 GitHub。
+
+如需查看提交到 Chrome 商店的可安装快照，请参考 GitHub Releases。
+
 ### 配置
 
 1. 点击扩展图标打开侧边栏
