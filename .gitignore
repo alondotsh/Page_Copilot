@@ -39,3 +39,4 @@ Thumbs.db
 
 # Release artifacts
 chrome-web-store/*.zip
+.gstack/

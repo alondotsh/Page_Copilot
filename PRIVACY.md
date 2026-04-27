@@ -8,7 +8,7 @@
 
 ## What is sent to external AI services
 
-- When you explicitly ask Page Copilot to summarize, translate, explain, or answer with page context, the relevant selected text, page text, or prompt content is sent to the AI API endpoint you configured.
+- When you explicitly ask Page Copilot to summarize, translate, explain, or answer with page context, the relevant selected text, page text, video transcript text, or prompt content is sent to the AI API endpoint you configured.
 - The extension does not send page content to an external AI service unless you trigger an AI action.
 
 ## What this extension does not collect

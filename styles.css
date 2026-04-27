@@ -479,6 +479,29 @@ body {
   max-width: 100%;
 }
 
+.transcript-detected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inline-action-btn {
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.inline-action-btn:hover {
+  background: #fde68a;
+}
+
 .message.error .message-content {
   background: #fee2e2;
   color: #991b1b;

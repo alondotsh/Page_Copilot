@@ -24,7 +24,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["video-transcript.js", "content.js"],
       "css": ["floating-toolbar.css"],
       "run_at": "document_idle"
     }

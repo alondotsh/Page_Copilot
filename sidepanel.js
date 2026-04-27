@@ -107,6 +107,8 @@ const MODEL_CONFIG = {
 
 // Global state
 let conversationHistory = [];
+let lastSummarySource = null;
+let lastTranscriptDownload = null;
 let currentProvider = 'claude';  // Currently selected provider
 let config = {
   apiKey: '',
@@ -313,7 +315,9 @@ async function saveConfig() {
 // Load stored history with retention filtering
 async function loadHistory() {
   try {
-    const result = await chrome.storage.local.get(['conversationHistory']);
+    const result = await chrome.storage.local.get(['conversationHistory', 'lastSummarySource']);
+    lastSummarySource = result.lastSummarySource || null;
+
     if (result.conversationHistory && Array.isArray(result.conversationHistory)) {
       const history = result.conversationHistory;
 
@@ -358,6 +362,38 @@ async function saveHistory() {
   } catch (error) {
     console.error('Failed to save conversation history:', error);
   }
+}
+
+/**
+ * Persist metadata about the source used for the latest summary.
+ * @param {object|null} source Source metadata for the latest summary.
+ */
+async function saveLastSummarySource(source) {
+  lastSummarySource = source;
+  await chrome.storage.local.set({ lastSummarySource: source });
+}
+
+/**
+ * Build source context for follow-up questions about the latest summary.
+ * @returns {string} Source context for the model.
+ */
+function buildLastSummarySourceContext() {
+  if (!lastSummarySource) return '';
+
+  const sourceType = lastSummarySource.contentType === 'videoTranscript'
+    ? 'video transcript'
+    : 'visible page text';
+
+  return `[Latest summary source]
+The latest summary was generated from ${sourceType}.
+Source name: ${lastSummarySource.sourceName}
+Language: ${lastSummarySource.language || 'unknown'}
+Title: ${lastSummarySource.title}
+URL: ${lastSummarySource.url}
+Text length: ${lastSummarySource.textLength} characters
+Excerpt from the source: ${lastSummarySource.excerpt}
+
+If the user asks what the latest summary was based on, answer using this source metadata. Do not infer the source from the recently viewed page summary when this metadata is available.`;
 }
 
 // Update API status indicator
@@ -471,11 +507,65 @@ async function getCurrentTab() {
 // Get page content
 async function getPageContent() {
   const tab = await getCurrentTab();
+  const isSupportedVideoPage = isSupportedVideoUrl(tab?.url || '');
+  const videoTranscript = await getVideoTranscriptContent(tab);
+  if (videoTranscript) {
+    return videoTranscript;
+  }
+
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' }, (response) => {
-      resolve(response?.data);
+      const pageContent = response?.data;
+      if (pageContent && isSupportedVideoPage) {
+        pageContent.videoTranscriptStatus = 'unavailable';
+      }
+      resolve(pageContent);
     });
   });
+}
+
+/**
+ * Check whether the current URL is a video page with supported captions.
+ * @param {string} url Current tab URL.
+ * @returns {boolean} Whether transcript extraction should be attempted.
+ */
+function isSupportedVideoUrl(url) {
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname;
+    return (hostname.includes('youtube.com') && parsedUrl.pathname === '/watch')
+      || (hostname.includes('bilibili.com') && /^\/video\//.test(parsedUrl.pathname));
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Inject the transcript extractor into the active tab and read available captions.
+ * @param {chrome.tabs.Tab} tab Current browser tab.
+ * @returns {Promise<object|null>} Transcript content object, or null when unavailable.
+ */
+async function getVideoTranscriptContent(tab) {
+  if (!tab?.id || !isSupportedVideoUrl(tab.url || '')) {
+    return null;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['video-transcript.js']
+    });
+
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => window.PageCopilotTranscript?.extractVideoTranscriptContent?.() || null
+    });
+
+    return result?.result || null;
+  } catch (error) {
+    console.warn('[Page Copilot] Failed to read video transcript directly:', error);
+    return null;
+  }
 }
 
 // Get selected text
@@ -719,9 +809,10 @@ async function callClaudeStream(userMessage, onChunk, onDone, onError) {
 
   // Build the system prompt with page context
   const pageContext = await buildPageContext();
+  const latestSummarySourceContext = buildLastSummarySourceContext();
   const enhancedConfig = {
     ...config,
-    systemPrompt: [customInstructionText, pageContext.trim()].filter(Boolean).join('\n\n')
+    systemPrompt: [customInstructionText, latestSummarySourceContext, pageContext.trim()].filter(Boolean).join('\n\n')
   };
 
   const port = chrome.runtime.connect({ name: 'claude-stream' });
@@ -780,6 +871,59 @@ function addSystemMessage(content, type = 'system') {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${type}`;
   messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+  elements.messages.appendChild(messageDiv);
+  elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
+}
+
+/**
+ * Download the latest detected transcript using a readable timed subtitle body.
+ */
+function downloadLastTranscript() {
+  if (!lastTranscriptDownload?.body) {
+    addSystemMessage('❌ No transcript is available to download', 'error');
+    return;
+  }
+
+  const blob = new Blob([lastTranscriptDownload.body], {
+    type: lastTranscriptDownload.mimeType || 'text/plain;charset=utf-8'
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = lastTranscriptDownload.fileName || 'transcript';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Show a contextual message when a downloadable transcript is available.
+ * @param {object} pageContent Extracted page or transcript content.
+ */
+function addTranscriptDetectedMessage(pageContent) {
+  const sourceName = pageContent.sourceName || 'Video transcript';
+  const language = pageContent.language || 'unknown language';
+  const textLength = Number(pageContent.textLength || 0).toLocaleString();
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message system';
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'message-content transcript-detected';
+
+  const label = document.createElement('span');
+  label.textContent = `${sourceName} detected: ${language}, ${textLength} characters.`;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'inline-action-btn';
+  button.textContent = 'Download transcript';
+  button.addEventListener('click', downloadLastTranscript);
+
+  contentDiv.append(label, button);
+  messageDiv.appendChild(contentDiv);
   elements.messages.appendChild(messageDiv);
   elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
 }
@@ -852,12 +996,35 @@ async function handleSummarize() {
     setButtonsDisabled(false);
     return;
   }
+  if (pageContent.videoTranscriptStatus === 'unavailable') {
+    addSystemMessage('⚠️ Captions were not readable from this video page. Falling back to visible page text.', 'error');
+  }
+  lastTranscriptDownload = pageContent.contentType === 'videoTranscript'
+    ? pageContent.download || null
+    : null;
 
   let text = pageContent.text;
   if (text.length > 10000) text = text.substring(0, 10000) + '\n\n[Content too long, truncated...]';
-  const prompt = `Please summarize the following webpage.\n\nPage title: ${pageContent.title}\n\nContent:\n${text}\n\nSummarize the main ideas, key details, and notable takeaways. Respect any higher-priority custom instructions for the response language. If no language preference is provided, respond in English.`;
+  const contentLabel = pageContent.contentType === 'videoTranscript'
+    ? `${pageContent.sourceName || 'video transcript'}`
+    : 'webpage';
+  const prompt = `Please summarize the following ${contentLabel}.\n\nPage title: ${pageContent.title}\n\nContent:\n${text}\n\nSummarize the main ideas, key details, and notable takeaways. Respect any higher-priority custom instructions for the response language. If no language preference is provided, respond in English.`;
+  await saveLastSummarySource({
+    contentType: pageContent.contentType || 'pageText',
+    sourceName: pageContent.sourceName || 'Visible page text',
+    language: pageContent.language || '',
+    title: pageContent.title,
+    url: pageContent.url,
+    textLength: pageContent.textLength,
+    excerpt: pageContent.excerpt,
+    timestamp: Date.now()
+  });
 
-  addMessage('📄 Summarize this page', 'user');
+  if (pageContent.contentType === 'videoTranscript' && lastTranscriptDownload) {
+    addTranscriptDetectedMessage(pageContent);
+  }
+
+  addMessage(pageContent.contentType === 'videoTranscript' ? '📄 Summarize video transcript' : '📄 Summarize this page', 'user');
 
   let currentResponse = '';
   const messageDiv = document.createElement('div');
@@ -1014,7 +1181,10 @@ function handleClear() {
       </div>
     `;
     conversationHistory = [];
+    lastSummarySource = null;
+    lastTranscriptDownload = null;
     saveHistory(); // Clear persisted storage
+    chrome.storage.local.remove('lastSummarySource');
   }
 }
 

@@ -21,7 +21,10 @@ const DRAG_END_SUPPRESS_MS = 150;
 const TOOLBAR_VIEWPORT_PADDING = 8;
 
 // ==================== 页面内容提取 ====================
-function extractPageContent() {
+async function extractPageContent() {
+  const videoTranscript = await window.PageCopilotTranscript?.extractVideoTranscriptContent();
+  if (videoTranscript) return videoTranscript;
+
   const excludeSelectors = [
     'script',
     'style',
@@ -533,9 +536,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   try {
     switch (request.action) {
       case 'getPageContent':
-        const content = extractPageContent();
-        console.log('[Page Copilot] Page content extracted:', content.textLength, 'characters');
-        sendResponse({ success: true, data: content });
+        extractPageContent()
+          .then((content) => {
+            console.log('[Page Copilot] Page content extracted:', content.textLength, 'characters');
+            sendResponse({ success: true, data: content });
+          })
+          .catch((error) => {
+            console.error('[Page Copilot] Page content extraction failed:', error);
+            sendResponse({ success: false, error: error.message });
+          });
         break;
 
       case 'getSelectedText':

@@ -17,6 +17,7 @@ The extension is built on Manifest V3 and supports bring-your-own model APIs, so
 ## ✨ Features
 
 - **Page summaries and follow-up Q&A**: extract the key ideas from the current page and keep asking grounded questions
+- **Video transcript summaries**: summarize YouTube captions and Bilibili subtitles, including readable AI subtitles when the page/account exposes them, with a timed-transcript download option
 - **Cross-page comparison**: compare recently visited articles, products, viewpoints, or options
 - **Translate / explain selected text**: work on a specific passage without leaving the page
 - **Floating toolbar**: copy, translate, ask, or export selected text to PDF directly from the webpage

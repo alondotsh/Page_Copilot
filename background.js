@@ -244,6 +244,40 @@ ${text}`
       })();
       break;
 
+    case 'fetchTextResource':
+      // Fetch cross-origin text resources that content scripts cannot read due to CORS.
+      (async () => {
+        try {
+          const resourceUrl = new URL(request.url);
+          if (!['http:', 'https:'].includes(resourceUrl.protocol)) {
+            sendResponse({ success: false, error: 'Unsupported resource URL protocol' });
+            return;
+          }
+
+          const response = await fetch(resourceUrl.toString(), {
+            method: 'GET',
+            credentials: 'include'
+          });
+          const body = await response.text();
+
+          if (!response.ok) {
+            sendResponse({ success: false, error: `HTTP ${response.status}`, status: response.status, body });
+            return;
+          }
+
+          sendResponse({
+            success: true,
+            body,
+            status: response.status,
+            contentType: response.headers.get('content-type') || ''
+          });
+        } catch (error) {
+          console.error('[Page Copilot] Failed to fetch text resource:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      break;
+
     default:
       sendResponse({ success: false, error: 'Unknown action' });
   }
