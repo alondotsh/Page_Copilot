@@ -111,6 +111,7 @@ const MODEL_CONFIG = {
 let conversationHistory = [];
 let lastSummarySource = null;
 let lastTranscriptDownload = null;
+let lastVideoTranscriptDiagnostic = null;
 let currentProvider = 'claude';  // Currently selected provider
 let isPageTranslationEnabled = false;
 let translationStateRequestId = 0;
@@ -583,6 +584,7 @@ async function getCurrentTab() {
 async function getPageContent() {
   const tab = await getCurrentTab();
   const isSupportedVideoPage = isSupportedVideoUrl(tab?.url || '');
+  lastVideoTranscriptDiagnostic = null;
   const videoTranscript = await getVideoTranscriptContent(tab);
   if (videoTranscript) {
     return videoTranscript;
@@ -593,6 +595,7 @@ async function getPageContent() {
       const pageContent = response?.data;
       if (pageContent && isSupportedVideoPage) {
         pageContent.videoTranscriptStatus = 'unavailable';
+        pageContent.videoTranscriptDiagnostic = lastVideoTranscriptDiagnostic;
       }
       resolve(pageContent);
     });
@@ -616,6 +619,28 @@ function isSupportedVideoUrl(url) {
 }
 
 /**
+ * Pick the most actionable transcript diagnostic from multiple injection worlds.
+ * @param {object[]} diagnostics Diagnostics collected from transcript extraction.
+ * @returns {object|null} Best diagnostic for the user to report.
+ */
+function selectBestTranscriptDiagnostic(diagnostics) {
+  const priority = [
+    'caption fetch failed',
+    'caption parse failed',
+    'caption url empty',
+    'no caption tracks',
+    'no player response',
+    'extractor exception'
+  ];
+
+  return [...diagnostics].sort((a, b) => {
+    const aIndex = priority.indexOf(a.reason);
+    const bIndex = priority.indexOf(b.reason);
+    return (aIndex === -1 ? priority.length : aIndex) - (bIndex === -1 ? priority.length : bIndex);
+  })[0] || null;
+}
+
+/**
  * Inject the transcript extractor into the active tab and read available captions.
  * @param {chrome.tabs.Tab} tab Current browser tab.
  * @returns {Promise<object|null>} Transcript content object, or null when unavailable.
@@ -626,26 +651,43 @@ async function getVideoTranscriptContent(tab) {
   }
 
   const hostname = new URL(tab.url).hostname;
-  const injectionWorld = hostname.includes('youtube.com') ? 'MAIN' : 'ISOLATED';
+  const injectionWorlds = hostname.includes('youtube.com') ? ['MAIN', 'ISOLATED'] : ['ISOLATED'];
+  const diagnostics = [];
 
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['video-transcript.js'],
-      world: injectionWorld
-    });
+  for (const injectionWorld of injectionWorlds) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['video-transcript.js'],
+        world: injectionWorld
+      });
 
-    const [result] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => window.PageCopilotTranscript?.extractVideoTranscriptContent?.() || null,
-      world: injectionWorld
-    });
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => window.PageCopilotTranscript?.extractVideoTranscriptContent?.() || null,
+        world: injectionWorld
+      });
 
-    return result?.result || null;
-  } catch (error) {
-    console.warn('[Page Copilot] Failed to read video transcript directly:', error);
-    return null;
+      if (result?.result?.contentType === 'videoTranscript') {
+        return result.result;
+      }
+
+      if (result?.result?.transcriptUnavailable) {
+        diagnostics.push({ ...result.result, world: injectionWorld });
+      }
+    } catch (error) {
+      console.warn(`[Page Copilot] Failed to read video transcript in ${injectionWorld} world:`, error);
+      diagnostics.push({
+        platform: hostname.includes('youtube.com') ? 'YouTube' : 'Bilibili',
+        reason: 'extractor exception',
+        details: { message: error.message },
+        world: injectionWorld
+      });
+    }
   }
+
+  lastVideoTranscriptDiagnostic = selectBestTranscriptDiagnostic(diagnostics);
+  return null;
 }
 
 // Get selected text
@@ -1008,6 +1050,35 @@ function addTranscriptDetectedMessage(pageContent) {
   elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
 }
 
+/**
+ * Format safe transcript extraction diagnostics for user-side debugging.
+ * @param {object|null} diagnostic Structured transcript diagnostic.
+ * @returns {string} Human-readable diagnostic line.
+ */
+function formatTranscriptDiagnostic(diagnostic) {
+  if (!diagnostic) return '';
+
+  const details = diagnostic.details || {};
+  const detailParts = [];
+
+  if (diagnostic.world) detailParts.push(`world=${diagnostic.world}`);
+  if (details.language) detailParts.push(`language=${details.language}`);
+  if (typeof details.hasVideoId === 'boolean') detailParts.push(`hasVideoId=${details.hasVideoId}`);
+  if (typeof details.hasInnertubeApiKey === 'boolean') detailParts.push(`hasApiKey=${details.hasInnertubeApiKey}`);
+  if (typeof details.hasInitialData === 'boolean') detailParts.push(`hasInitialData=${details.hasInitialData}`);
+  if (typeof details.captionTrackCount === 'number') detailParts.push(`captionTracks=${details.captionTrackCount}`);
+  if (Array.isArray(details.failures) && details.failures.length) {
+    detailParts.push(`failures=${details.failures.join(' | ')}`);
+  }
+  if (Array.isArray(details.parseFailures) && details.parseFailures.length) {
+    detailParts.push(`parse=${details.parseFailures.join(' | ')}`);
+  }
+  if (details.message) detailParts.push(`message=${details.message}`);
+
+  const suffix = detailParts.length ? ` (${detailParts.join('; ')})` : '';
+  return `Diagnostic: ${diagnostic.platform || 'video'} / ${diagnostic.reason || 'unknown'}${suffix}`;
+}
+
 // Handle sending messages (streaming)
 async function handleSend() {
   const userMessage = elements.userInput.value.trim();
@@ -1077,7 +1148,11 @@ async function handleSummarize() {
     return;
   }
   if (pageContent.videoTranscriptStatus === 'unavailable') {
-    addSystemMessage('⚠️ Captions were not readable from this video page. Falling back to visible page text.', 'error');
+    const diagnosticText = formatTranscriptDiagnostic(pageContent.videoTranscriptDiagnostic);
+    addSystemMessage(
+      `⚠️ Captions were not readable from this video page. Falling back to visible page text.${diagnosticText ? `\n${diagnosticText}` : ''}`,
+      'error'
+    );
   }
   lastTranscriptDownload = pageContent.contentType === 'videoTranscript'
     ? pageContent.download || null

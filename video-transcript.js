@@ -364,6 +364,21 @@ function selectYouTubeCaptionTrack(playerResponse) {
 }
 
 /**
+ * Build a structured YouTube transcript diagnostic response.
+ * @param {string} reason Machine-readable failure category.
+ * @param {object} details Safe diagnostic details.
+ * @returns {object} Diagnostic response.
+ */
+function buildYouTubeTranscriptDiagnostic(reason, details = {}) {
+  return {
+    transcriptUnavailable: true,
+    platform: 'YouTube',
+    reason,
+    details
+  };
+}
+
+/**
  * Read the current page's YouTube InnerTube API key.
  * @returns {string} API key embedded in the YouTube page.
  */
@@ -398,77 +413,135 @@ async function fetchYouTubeAndroidPlayerResponse(videoId) {
     osVersion: '11'
   };
 
-  const response = await fetch(`/youtubei/v1/player?key=${encodeURIComponent(apiKey)}&prettyPrint=false`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-YouTube-Client-Name': '3',
-      'X-YouTube-Client-Version': client.clientVersion
-    },
-    body: JSON.stringify({
-      videoId,
-      context: { client }
-    })
-  });
+  try {
+    const response = await fetch(`/youtubei/v1/player?key=${encodeURIComponent(apiKey)}&prettyPrint=false`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-YouTube-Client-Name': '3',
+        'X-YouTube-Client-Version': client.clientVersion
+      },
+      body: JSON.stringify({
+        videoId,
+        context: { client }
+      })
+    });
 
-  if (!response.ok) return null;
-  return response.json();
+    if (!response.ok) return null;
+    return response.json();
+  } catch (error) {
+    console.warn('[Page Copilot] Failed to fetch YouTube Android player response:', error);
+    return null;
+  }
 }
 
 /**
  * Fetch readable text and download metadata from a YouTube caption track.
  * @param {object} track YouTube caption track metadata.
- * @returns {Promise<object|null>} Transcript payload, or null when unavailable.
+ * @returns {Promise<{payload: object|null, diagnostic: object|null}>} Transcript payload and diagnostics.
  */
 async function fetchYouTubeCaptionPayload(track) {
-  if (!track?.baseUrl) return null;
+  if (!track?.baseUrl) {
+    return {
+      payload: null,
+      diagnostic: buildYouTubeTranscriptDiagnostic('caption url empty', {
+        language: track?.languageCode || '',
+        hasTrack: !!track
+      })
+    };
+  }
 
   const captionUrl = new URL(track.baseUrl);
   captionUrl.searchParams.set('fmt', 'json3');
+  const failures = [];
+  const parseFailures = [];
+  let sawCaptionBody = false;
 
-  const response = await fetch(captionUrl.toString(), { credentials: 'include' });
-  if (response.ok) {
-    const body = await response.text();
+  try {
+    const response = await fetchTextWithBackgroundFallback(captionUrl.toString());
+    const body = response.body || '';
     if (body.trim()) {
+      sawCaptionBody = true;
       try {
         const data = JSON.parse(body);
         const text = parseYouTubeJsonTranscript(data);
         const cues = parseYouTubeJsonCues(data);
         if (text) {
           return {
-            text,
-            download: buildTranscriptDownload({
-              platform: 'YouTube',
-              title: document.title,
-              language: track.languageCode || '',
-              body: buildWebVtt(cues)
-            })
+            payload: {
+              text,
+              download: buildTranscriptDownload({
+                platform: 'YouTube',
+                title: document.title,
+                language: track.languageCode || '',
+                body: buildWebVtt(cues)
+              })
+            },
+            diagnostic: null
           };
         }
+        parseFailures.push('json3 parsed without readable text');
       } catch (error) {
         console.warn('[Page Copilot] Failed to parse YouTube JSON captions:', error);
+        parseFailures.push(`json3 parse failed: ${error.message}`);
       }
+    } else {
+      parseFailures.push('json3 response was empty');
     }
+  } catch (error) {
+    console.warn('[Page Copilot] Failed to fetch YouTube JSON captions:', error);
+    failures.push(`json3 fetch failed: ${error.message}`);
   }
 
   captionUrl.searchParams.delete('fmt');
-  const xmlResponse = await fetch(captionUrl.toString(), { credentials: 'include' });
-  if (!xmlResponse.ok) return null;
+  let xmlText = '';
+  try {
+    const xmlResponse = await fetchTextWithBackgroundFallback(captionUrl.toString());
+    xmlText = xmlResponse.body || '';
+    if (xmlText.trim()) {
+      sawCaptionBody = true;
+    } else {
+      parseFailures.push('xml response was empty');
+    }
+  } catch (error) {
+    console.warn('[Page Copilot] Failed to fetch YouTube XML captions:', error);
+    failures.push(`xml fetch failed: ${error.message}`);
+    return {
+      payload: null,
+      diagnostic: buildYouTubeTranscriptDiagnostic('caption fetch failed', {
+        language: track.languageCode || '',
+        failures,
+        parseFailures
+      })
+    };
+  }
 
-  const xmlText = await xmlResponse.text();
   const text = xmlText.trim() ? parseYouTubeXmlTranscript(xmlText) : '';
   const cues = xmlText.trim() ? parseYouTubeXmlCues(xmlText) : [];
-  if (!text) return null;
+  if (!text) {
+    const reason = failures.length && !sawCaptionBody ? 'caption fetch failed' : 'caption parse failed';
+    return {
+      payload: null,
+      diagnostic: buildYouTubeTranscriptDiagnostic(reason, {
+        language: track.languageCode || '',
+        failures,
+        parseFailures
+      })
+    };
+  }
 
   return {
-    text,
-    download: buildTranscriptDownload({
-      platform: 'YouTube',
-      title: document.title,
-      language: track.languageCode || '',
-      body: buildWebVtt(cues)
-    })
+    payload: {
+      text,
+      download: buildTranscriptDownload({
+        platform: 'YouTube',
+        title: document.title,
+        language: track.languageCode || '',
+        body: buildWebVtt(cues)
+      })
+    },
+    diagnostic: null
   };
 }
 
@@ -507,16 +580,63 @@ async function extractYouTubeTranscriptContent() {
   const videoId = getYouTubeVideoId();
   let playerResponse = window.ytInitialPlayerResponse
     || readInlineJsonObject(['ytInitialPlayerResponse =', 'ytInitialPlayerResponse=']);
+  let diagnostic = null;
+
+  if (!playerResponse) {
+    playerResponse = await fetchYouTubeAndroidPlayerResponse(videoId);
+  }
+
+  if (!playerResponse) {
+    const initialData = window.ytInitialData
+      || readInlineJsonObject(['ytInitialData =', 'ytInitialData=']);
+    const panelPayload = fetchYouTubeTranscriptPanelPayload(initialData, '');
+    if (panelPayload?.text) {
+      return {
+        title: document.title,
+        url: location.href,
+        text: panelPayload.text,
+        textLength: panelPayload.text.length,
+        excerpt: panelPayload.text.substring(0, 500) + (panelPayload.text.length > 500 ? '...' : ''),
+        contentType: 'videoTranscript',
+        sourceName: 'YouTube captions',
+        language: '',
+        download: panelPayload.download
+      };
+    }
+
+    return buildYouTubeTranscriptDiagnostic('no player response', {
+      hasVideoId: !!videoId,
+      hasInnertubeApiKey: !!getYouTubeInnertubeApiKey(),
+      hasInitialData: !!initialData
+    });
+  }
+
   let track = selectYouTubeCaptionTrack(playerResponse);
   let selectedLanguage = track?.languageCode || '';
-  let payload = await fetchYouTubeCaptionPayload(track);
+  let captionResult = { payload: null, diagnostic: null };
+  let payload = null;
+
+  if (track) {
+    captionResult = await fetchYouTubeCaptionPayload(track);
+    payload = captionResult.payload;
+    diagnostic = captionResult.diagnostic;
+  } else {
+    diagnostic = buildYouTubeTranscriptDiagnostic('no caption tracks', {
+      hasPlayerResponse: true,
+      captionTrackCount: 0
+    });
+  }
 
   if (!payload?.text) {
     const androidPlayerResponse = await fetchYouTubeAndroidPlayerResponse(videoId);
     playerResponse = androidPlayerResponse || playerResponse;
     track = selectYouTubeCaptionTrack(playerResponse);
     selectedLanguage = track?.languageCode || selectedLanguage;
-    payload = await fetchYouTubeCaptionPayload(track);
+    if (track) {
+      captionResult = await fetchYouTubeCaptionPayload(track);
+      payload = captionResult.payload;
+      diagnostic = captionResult.diagnostic || diagnostic;
+    }
   }
 
   if (!payload?.text) {
@@ -525,7 +645,12 @@ async function extractYouTubeTranscriptContent() {
     payload = fetchYouTubeTranscriptPanelPayload(initialData, selectedLanguage);
   }
 
-  if (!payload?.text) return null;
+  if (!payload?.text) {
+    return diagnostic || buildYouTubeTranscriptDiagnostic('no caption tracks', {
+      hasPlayerResponse: !!playerResponse,
+      captionTrackCount: playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length || 0
+    });
+  }
 
   return {
     title: document.title,
