@@ -33,13 +33,7 @@ The extension is open-source, local-first, built on Manifest V3, and currently s
 
 ### Installation
 
-#### Option 1: Chrome Web Store
-
-Install the published extension from the Chrome Web Store:
-
-https://chromewebstore.google.com/detail/page-copilot-by-alon/adbompcgkenehcjfpacopbdadcoomppa
-
-#### Option 2: Developer Mode
+#### Option 1: Developer Mode
 
 1. Clone the repository
 
@@ -53,11 +47,13 @@ cd Page_Copilot
 4. Click **Load unpacked**
 5. Select this project directory
 
-### Releases and Chrome Web Store
+#### Option 2: Chrome Web Store
 
-The `main` branch contains the latest public source code. Chrome Web Store releases may lag behind GitHub because each store update goes through review.
+Install the published extension from the Chrome Web Store:
 
-For installable snapshots submitted to the Chrome Web Store, see GitHub Releases.
+https://chromewebstore.google.com/detail/page-copilot-by-alon/adbompcgkenehcjfpacopbdadcoomppa
+
+Note: the Chrome Web Store version may lag behind the source code in this repository because store updates require review.
 
 ### Configuration
 
