@@ -873,10 +873,32 @@ function bindEvents() {
 
   elements.clearBtn.addEventListener('click', handleClear);
 
-  // Copy-code interaction
+  // Copy interactions
   elements.messages.addEventListener('click', (e) => {
-    if (e.target.classList.contains('copy-btn')) {
-      const btn = e.target;
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target) return;
+
+    const messageCopyBtn = target.closest('.copy-message-btn');
+    if (messageCopyBtn) {
+      const btn = messageCopyBtn;
+      const messageDiv = btn.closest('.message.assistant');
+      const renderedText = messageDiv?.querySelector('.message-content')?.innerText;
+      const text = renderedText || messageDiv?.dataset.copyText || '';
+
+      navigator.clipboard.writeText(text).then(() => {
+        const originalHtml = btn.innerHTML;
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+          btn.classList.remove('copied');
+        }, 1600);
+      });
+      return;
+    }
+
+    if (target.classList.contains('copy-btn')) {
+      const btn = target;
       const wrapper = btn.closest('.code-block-wrapper');
       const code = wrapper.querySelector('code').innerText;
 
@@ -891,6 +913,44 @@ function bindEvents() {
       });
     }
   });
+}
+
+/**
+ * Add a copy button to an assistant message.
+ * @param {HTMLElement} messageDiv Assistant message container.
+ * @param {string} text Text copied by the button.
+ */
+function addAssistantCopyButton(messageDiv, text = '') {
+  if (!messageDiv.classList.contains('assistant')) return;
+  if (messageDiv.querySelector('.copy-message-btn')) return;
+
+  messageDiv.dataset.copyText = text;
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'copy-message-btn';
+  button.innerHTML = `
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h6A1.5 1.5 0 0 1 16 3.5v6A1.5 1.5 0 0 1 14.5 11h-6A1.5 1.5 0 0 1 7 9.5v-6Z"></path>
+      <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6H6v3.5A2.5 2.5 0 0 0 8.5 12H12v.5A1.5 1.5 0 0 1 10.5 14h-5A1.5 1.5 0 0 1 4 12.5v-5Z"></path>
+    </svg>
+  `;
+  button.title = 'Copy response';
+  button.setAttribute('aria-label', 'Copy response');
+  actions.appendChild(button);
+  messageDiv.appendChild(actions);
+}
+
+/**
+ * Update the text copied by an assistant message copy button.
+ * @param {HTMLElement} messageDiv Assistant message container.
+ * @param {string} text Latest assistant response text.
+ */
+function updateAssistantCopyText(messageDiv, text) {
+  if (!messageDiv.classList.contains('assistant')) return;
+  messageDiv.dataset.copyText = text || '';
 }
 
 /**
@@ -1391,6 +1451,9 @@ function addMessage(content, type = 'assistant', save = true) {
   }
 
   messageDiv.appendChild(contentDiv);
+  if (type === 'assistant') {
+    addAssistantCopyButton(messageDiv, content);
+  }
   elements.messages.appendChild(messageDiv);
   elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
 
@@ -1532,6 +1595,7 @@ async function handleSend() {
   contentDiv.className = 'message-content';
   contentDiv.innerHTML = '<span class="cursor">|</span>'; // Cursor effect
   messageDiv.appendChild(contentDiv);
+  addAssistantCopyButton(messageDiv);
   elements.messages.appendChild(messageDiv);
 
   callClaudeStream(
@@ -1539,6 +1603,7 @@ async function handleSend() {
     (chunk) => {
       currentResponse += chunk;
       contentDiv.innerHTML = renderMarkdown(currentResponse);
+      updateAssistantCopyText(messageDiv, currentResponse);
       elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
     },
     () => {
@@ -1606,6 +1671,7 @@ async function handleSummarize() {
   contentDiv.className = 'message-content';
   contentDiv.innerHTML = '...';
   messageDiv.appendChild(contentDiv);
+  addAssistantCopyButton(messageDiv);
   elements.messages.appendChild(messageDiv);
 
   callClaudeStream(
@@ -1613,6 +1679,7 @@ async function handleSummarize() {
     (chunk) => {
       currentResponse += chunk;
       contentDiv.innerHTML = renderMarkdown(currentResponse);
+      updateAssistantCopyText(messageDiv, currentResponse);
       elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
     },
     () => {
@@ -1646,6 +1713,7 @@ async function handleTranslate() {
   contentDiv.className = 'message-content';
   contentDiv.innerHTML = '...';
   messageDiv.appendChild(contentDiv);
+  addAssistantCopyButton(messageDiv);
   elements.messages.appendChild(messageDiv);
 
   callClaudeStream(
@@ -1653,6 +1721,7 @@ async function handleTranslate() {
     (chunk) => {
       currentResponse += chunk;
       contentDiv.innerHTML = renderMarkdown(currentResponse);
+      updateAssistantCopyText(messageDiv, currentResponse);
       elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
     },
     () => {
@@ -1750,6 +1819,7 @@ async function handleExplain() {
   contentDiv.className = 'message-content';
   contentDiv.innerHTML = '...';
   messageDiv.appendChild(contentDiv);
+  addAssistantCopyButton(messageDiv);
   elements.messages.appendChild(messageDiv);
 
   callClaudeStream(
@@ -1757,6 +1827,7 @@ async function handleExplain() {
     (chunk) => {
       currentResponse += chunk;
       contentDiv.innerHTML = renderMarkdown(currentResponse);
+      updateAssistantCopyText(messageDiv, currentResponse);
       elements.messages.parentElement.scrollTop = elements.messages.parentElement.scrollHeight;
     },
     () => {
