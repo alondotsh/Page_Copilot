@@ -9,7 +9,7 @@ It focuses on three core workflows:
 - Summarize the current page and continue asking follow-up questions grounded in its content
 - Understand YouTube and Bilibili videos through readable transcripts when captions are available
 
-The extension is open-source, local-first, built on Manifest V3, and currently supports Claude and Zhipu GLM with your own API key. More providers can be added over time.
+The extension is open-source, local-first, built on Manifest V3, and works with your own model API key through built-in provider presets or compatible custom endpoints.
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome)
 ![Bring Your Model](https://img.shields.io/badge/Model-Bring%20Your%20Own-0f766e)
@@ -22,7 +22,7 @@ The extension is open-source, local-first, built on Manifest V3, and currently s
 - **Video transcript summaries**: summarize YouTube captions and Bilibili subtitles, including readable AI subtitles when the page/account exposes them, with a timed-transcript download option
 - **Translate / explain selected text**: work on a specific passage without leaving the page
 - **Floating toolbar**: copy, translate, ask, or export selected text to PDF directly from the webpage
-- **Bring your own model API**: configure Claude or Zhipu GLM with your own API key; more providers can be added over time
+- **Bring your own model API**: use built-in presets for major providers, or enter a custom OpenAI-compatible or Anthropic-compatible endpoint
 
 ## 🚀 Quick Start
 
@@ -87,8 +87,9 @@ Page_Copilot/
 ## 🛠️ Technical Notes
 
 - **Chrome Extension APIs**: `sidePanel`, `contextMenus`, `storage`, `scripting`, `tabs`
-- **Model calls**: compatible with Anthropic Messages-style endpoints
-- **Built-in providers**: Claude and GLM
+- **Model calls**: compatible with Anthropic Messages-style and OpenAI-compatible endpoints
+- **Built-in providers**: Claude, GLM, OpenAI, Gemini, Grok, DeepSeek, Qwen, Kimi, OpenRouter, SiliconFlow, MiniMax, MiMo, and custom compatible endpoints
+- **Provider testing**: GLM is the primary tested provider today. Other presets use compatible API formats and may depend on each provider's current API behavior. Feedback and fixes are welcome.
 - **Markdown rendering**: lightweight custom renderer with no external dependency, compatible with extension CSP
 
 ## 📚 Documentation
@@ -112,7 +113,7 @@ See [LICENSE](LICENSE) for the full license text.
 
 ## 🙋 Feedback
 
-- Claude and GLM are configured by default, and you can extend the provider list if needed
+- Built-in provider presets are provided for convenience; custom compatible endpoints can be configured manually
 - Bug reports, usage questions, and feature requests: https://github.com/alondotsh/Page_Copilot/issues
 - For updates or informal feedback:
 - X: @alondotsh

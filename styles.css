@@ -146,6 +146,40 @@ body {
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
+.api-key-field {
+  position: relative;
+}
+
+.api-key-field input {
+  padding-right: 40px;
+}
+
+.api-key-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.api-key-toggle:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.api-key-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+}
+
 .form-group small {
   display: block;
   margin-top: 4px;

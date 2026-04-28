@@ -75,37 +75,279 @@ function renderMarkdown(text) {
 const MODEL_CONFIG = {
   claude: {
     name: 'Anthropic Claude',
+    apiFormat: 'anthropic',
     defaultUrl: 'https://api.anthropic.com',
+    defaultModel: 'claude-haiku-4-5',
+    defaultTranslateModel: 'claude-haiku-4-5',
     models: {
       chat: [
-        { value: '', label: 'Default (use API default model)' },
-        { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (recommended)' },
-        { value: 'claude-opus-4-20250514', label: 'Claude Opus 4 (most capable)' },
-        { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (fastest)' }
+        { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (recommended, fast)' },
+        { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (stronger)' },
+        { value: 'claude-opus-4-5', label: 'Claude Opus 4.5 (most capable)' }
       ],
       translate: [
-        { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (recommended, fast)' },
-        { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (higher quality)' },
-        { value: 'claude-opus-4-20250514', label: 'Claude Opus 4 (most capable)' }
+        { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (recommended, fast)' },
+        { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (higher quality)' },
+        { value: 'claude-opus-4-5', label: 'Claude Opus 4.5 (most capable)' }
       ]
     }
   },
   glm: {
     name: 'Zhipu GLM',
+    apiFormat: 'anthropic',
     defaultUrl: 'https://open.bigmodel.cn/api/anthropic',
+    defaultModel: 'glm-4.7',
+    defaultTranslateModel: 'glm-4.7',
     models: {
       chat: [
         { value: 'glm-4.7', label: 'GLM-4.7 (recommended)' },
-        { value: 'glm-4.5-air', label: 'GLM-4.5 Air (fast)' },
-        { value: '', label: 'Default (use API default model)' }
+        { value: 'glm-4.5-air', label: 'GLM-4.5 Air (fast)' }
       ],
       translate: [
         { value: 'glm-4.7', label: 'GLM-4.7' },
         { value: 'glm-4.5-air', label: 'GLM-4.5 Air (fast)' }
       ]
     }
+  },
+  openai: {
+    name: 'OpenAI',
+    apiFormat: 'openai',
+    defaultUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-5.4-mini',
+    defaultTranslateModel: 'gpt-5.4-mini',
+    models: {
+      chat: [
+        { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini (recommended)' },
+        { value: 'gpt-5-mini', label: 'GPT-5 Mini (lower cost)' },
+        { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano (lowest cost)' },
+        { value: 'gpt-5.5', label: 'GPT-5.5 (stronger)' }
+      ],
+      translate: [
+        { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini (recommended)' },
+        { value: 'gpt-5-mini', label: 'GPT-5 Mini (lower cost)' },
+        { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano (lowest cost)' }
+      ]
+    }
+  },
+  gemini: {
+    name: 'Google Gemini',
+    apiFormat: 'openai',
+    defaultUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    defaultModel: 'gemini-2.5-flash',
+    defaultTranslateModel: 'gemini-2.5-flash',
+    models: {
+      chat: [
+        { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (recommended)' },
+        { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (lowest cost)' },
+        { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+        { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' }
+      ],
+      translate: [
+        { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (recommended)' },
+        { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (lower cost)' },
+        { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+        { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' }
+      ]
+    }
+  },
+  grok: {
+    name: 'xAI Grok',
+    apiFormat: 'openai',
+    defaultUrl: 'https://api.x.ai/v1',
+    defaultModel: 'grok-4.20',
+    defaultTranslateModel: 'grok-4.20',
+    models: {
+      chat: [
+        { value: 'grok-4.20', label: 'Grok 4.20 (recommended)' },
+        { value: 'grok-4.20-reasoning', label: 'Grok 4.20 Reasoning' }
+      ],
+      translate: [
+        { value: 'grok-4.20', label: 'Grok 4.20 (recommended)' },
+        { value: 'grok-4.20-reasoning', label: 'Grok 4.20 Reasoning' }
+      ]
+    }
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    apiFormat: 'openai',
+    defaultUrl: 'https://api.deepseek.com',
+    defaultModel: 'deepseek-v4-flash',
+    defaultTranslateModel: 'deepseek-v4-flash',
+    models: {
+      chat: [
+        { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash (recommended)' },
+        { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' }
+      ],
+      translate: [
+        { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash (recommended)' },
+        { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' }
+      ]
+    }
+  },
+  qwen: {
+    name: 'Alibaba Qwen',
+    apiFormat: 'openai',
+    defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModel: 'qwen3.6-plus',
+    defaultTranslateModel: 'qwen3.6-plus',
+    models: {
+      chat: [
+        { value: 'qwen3.6-plus', label: 'Qwen3.6 Plus (recommended)' },
+        { value: 'qwen3.6-turbo', label: 'Qwen3.6 Turbo (fast)' },
+        { value: 'qwen-max', label: 'Qwen Max' }
+      ],
+      translate: [
+        { value: 'qwen3.6-plus', label: 'Qwen3.6 Plus (recommended)' },
+        { value: 'qwen3.6-turbo', label: 'Qwen3.6 Turbo (fast)' },
+        { value: 'qwen-max', label: 'Qwen Max' }
+      ]
+    }
+  },
+  kimi: {
+    name: 'Moonshot Kimi',
+    apiFormat: 'openai',
+    defaultUrl: 'https://api.moonshot.cn/v1',
+    defaultModel: 'kimi-k2.6',
+    defaultTranslateModel: 'kimi-k2.6',
+    models: {
+      chat: [
+        { value: 'kimi-k2.6', label: 'Kimi K2.6 (recommended)' },
+        { value: 'kimi-k2.5', label: 'Kimi K2.5' }
+      ],
+      translate: [
+        { value: 'kimi-k2.6', label: 'Kimi K2.6 (recommended)' },
+        { value: 'kimi-k2.5', label: 'Kimi K2.5' }
+      ]
+    }
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    apiFormat: 'openai',
+    defaultUrl: 'https://openrouter.ai/api/v1',
+    defaultModel: 'openai/gpt-5.4-mini',
+    defaultTranslateModel: 'openai/gpt-5.4-mini',
+    models: {
+      chat: [
+        { value: 'openai/gpt-5.4-mini', label: 'OpenAI GPT-5.4 Mini (recommended)' },
+        { value: 'openai/gpt-5-mini', label: 'OpenAI GPT-5 Mini' },
+        { value: 'openai/gpt-5.4-nano', label: 'OpenAI GPT-5.4 Nano' },
+        { value: 'openai/gpt-5.5', label: 'OpenAI GPT-5.5' }
+      ],
+      translate: [
+        { value: 'openai/gpt-5.4-mini', label: 'OpenAI GPT-5.4 Mini (recommended)' },
+        { value: 'openai/gpt-5-mini', label: 'OpenAI GPT-5 Mini' },
+        { value: 'openai/gpt-5.4-nano', label: 'OpenAI GPT-5.4 Nano' },
+        { value: 'openai/gpt-5.5', label: 'OpenAI GPT-5.5' }
+      ]
+    }
+  },
+  siliconflow: {
+    name: 'SiliconFlow',
+    apiFormat: 'openai',
+    defaultUrl: 'https://api.siliconflow.cn/v1',
+    defaultModel: 'deepseek-ai/DeepSeek-V4-Flash',
+    defaultTranslateModel: 'deepseek-ai/DeepSeek-V4-Flash',
+    models: {
+      chat: [
+        { value: 'deepseek-ai/DeepSeek-V4-Flash', label: 'DeepSeek V4 Flash (recommended)' },
+        { value: 'deepseek-ai/DeepSeek-V4-Pro', label: 'DeepSeek V4 Pro' },
+        { value: 'deepseek-ai/DeepSeek-V3', label: 'DeepSeek V3' },
+        { value: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen2.5 72B Instruct' }
+      ],
+      translate: [
+        { value: 'deepseek-ai/DeepSeek-V4-Flash', label: 'DeepSeek V4 Flash (recommended)' },
+        { value: 'deepseek-ai/DeepSeek-V4-Pro', label: 'DeepSeek V4 Pro' },
+        { value: 'deepseek-ai/DeepSeek-V3', label: 'DeepSeek V3' },
+        { value: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen2.5 72B Instruct' }
+      ]
+    }
+  },
+  minimax: {
+    name: 'MiniMax',
+    apiFormat: 'openai',
+    defaultUrl: 'https://api.minimax.io/v1',
+    defaultModel: 'minimax-m2.7',
+    defaultTranslateModel: 'minimax-m2.7',
+    models: {
+      chat: [
+        { value: 'minimax-m2.7', label: 'MiniMax M2.7 (recommended)' },
+        { value: 'minimax-m2.7-highspeed', label: 'MiniMax M2.7 Highspeed' },
+        { value: 'minimax-m2.5', label: 'MiniMax M2.5' }
+      ],
+      translate: [
+        { value: 'minimax-m2.7', label: 'MiniMax M2.7 (recommended)' },
+        { value: 'minimax-m2.7-highspeed', label: 'MiniMax M2.7 Highspeed' },
+        { value: 'minimax-m2.5', label: 'MiniMax M2.5' }
+      ]
+    }
+  },
+  mimo: {
+    name: 'Xiaomi MiMo',
+    apiFormat: 'openai',
+    defaultUrl: '',
+    defaultModel: 'mimo-v2-flash',
+    defaultTranslateModel: 'mimo-v2-flash',
+    models: {
+      chat: [
+        { value: 'mimo-v2-flash', label: 'MiMo V2 Flash (recommended)' },
+        { value: 'mimo-v2.5-pro-flash', label: 'MiMo V2.5 Pro Flash' }
+      ],
+      translate: [
+        { value: 'mimo-v2-flash', label: 'MiMo V2 Flash (recommended)' },
+        { value: 'mimo-v2.5-pro-flash', label: 'MiMo V2.5 Pro Flash' }
+      ]
+    }
+  },
+  customOpenAI: {
+    name: 'Custom OpenAI-compatible',
+    apiFormat: 'openai',
+    defaultUrl: '',
+    defaultModel: '',
+    defaultTranslateModel: '',
+    models: {
+      chat: [
+        { value: '', label: 'Type your model name' }
+      ],
+      translate: [
+        { value: '', label: 'Type your model name' }
+      ]
+    }
+  },
+  customAnthropic: {
+    name: 'Custom Anthropic-compatible',
+    apiFormat: 'anthropic',
+    defaultUrl: '',
+    defaultModel: '',
+    defaultTranslateModel: '',
+    models: {
+      chat: [
+        { value: '', label: 'Type your model name' }
+      ],
+      translate: [
+        { value: '', label: 'Type your model name' }
+      ]
+    }
   }
 };
+
+const PROVIDER_GROUPS = [
+  {
+    label: 'Global providers',
+    providers: ['claude', 'openai', 'gemini', 'grok']
+  },
+  {
+    label: 'China providers',
+    providers: ['glm', 'deepseek', 'qwen', 'kimi', 'minimax', 'mimo']
+  },
+  {
+    label: 'Gateways',
+    providers: ['openrouter', 'siliconflow']
+  },
+  {
+    label: 'Custom',
+    providers: ['customOpenAI', 'customAnthropic']
+  }
+];
 
 // Global state
 let conversationHistory = [];
@@ -115,9 +357,12 @@ let lastVideoTranscriptDiagnostic = null;
 let currentProvider = 'claude';  // Currently selected provider
 let isPageTranslationEnabled = false;
 let translationStateRequestId = 0;
+let modelInputFocusValue = '';
+let translateModelInputFocusValue = '';
 let config = {
   apiKey: '',
   apiUrl: '',
+  apiFormat: 'anthropic',
   model: '',
   translateModel: '',
   translateBatchSize: 30,
@@ -126,29 +371,78 @@ let config = {
   retentionHours: 48
 };
 
-// Per-provider configuration store
-let providerConfigs = {
-  claude: {
-    apiKey: '',
-    apiUrl: 'https://api.anthropic.com',
-    model: '',
-    translateModel: 'claude-3-5-haiku-20241022',
-    translateBatchSize: 30,
-    systemPrompt: '',
-    contextPageCount: 10,
-    retentionHours: 48
-  },
-  glm: {
-    apiKey: '',
-    apiUrl: 'https://open.bigmodel.cn/api/anthropic',
-    model: 'glm-4.7',
-    translateModel: 'glm-4.7',
-    translateBatchSize: 30,
-    systemPrompt: '',
-    contextPageCount: 10,
-    retentionHours: 48
-  }
+let globalSettings = {
+  translateBatchSize: 30,
+  systemPrompt: '',
+  contextPageCount: 10,
+  retentionHours: 48
 };
+
+/**
+ * Merge active provider configuration with global settings for runtime use.
+ * @param {object} providerConfig Provider-specific settings.
+ * @returns {object} Runtime configuration.
+ */
+function buildRuntimeConfig(providerConfig) {
+  return {
+    ...providerConfig,
+    ...globalSettings
+  };
+}
+
+/**
+ * Build the default persisted settings for a provider preset.
+ * @param {string} provider Provider id.
+ * @returns {object} Default provider settings.
+ */
+function buildDefaultProviderConfig(provider) {
+  const providerSpec = MODEL_CONFIG[provider] || MODEL_CONFIG.claude;
+  return {
+    apiKey: '',
+    apiUrl: providerSpec.defaultUrl,
+    apiFormat: providerSpec.apiFormat,
+    model: providerSpec.defaultModel,
+    translateModel: providerSpec.defaultTranslateModel
+  };
+}
+
+// Per-provider configuration store
+let providerConfigs = Object.fromEntries(
+  Object.keys(MODEL_CONFIG).map((provider) => [provider, buildDefaultProviderConfig(provider)])
+);
+
+const LEGACY_MODEL_MIGRATIONS = {
+  'claude-3-5-haiku-20241022': 'claude-haiku-4-5',
+  'deepseek-chat': 'deepseek-v4-flash',
+  'deepseek-reasoner': 'deepseek-v4-flash',
+  'qwen-plus': 'qwen3.6-plus',
+  'qwen-turbo': 'qwen3.6-plus',
+  'MiniMax-Text-01': 'minimax-m2.7',
+  'deepseek-ai/DeepSeek-V3': 'deepseek-ai/DeepSeek-V4-Flash',
+  'openai/gpt-4.1-mini': 'openai/gpt-5.4-mini',
+  'moonshot-v1-32k': 'kimi-k2.6',
+  'moonshot-v1-128k': 'kimi-k2.6'
+};
+
+/**
+ * Migrate legacy saved model ids to current presets.
+ * @param {object} providerConfig Saved provider configuration.
+ * @returns {{config: object, changed: boolean}} Migrated config and change flag.
+ */
+function migrateProviderConfig(providerConfig) {
+  const migratedConfig = { ...providerConfig };
+  let changed = false;
+
+  ['model', 'translateModel'].forEach((field) => {
+    const nextModel = LEGACY_MODEL_MIGRATIONS[migratedConfig[field]];
+    if (nextModel) {
+      migratedConfig[field] = nextModel;
+      changed = true;
+    }
+  });
+
+  return { config: migratedConfig, changed };
+}
 
 // DOM elements
 const elements = {
@@ -156,6 +450,7 @@ const elements = {
   settingsPanel: document.getElementById('settingsPanel'),
   apiProvider: document.getElementById('apiProvider'),
   apiKey: document.getElementById('apiKey'),
+  toggleApiKeyVisibility: document.getElementById('toggleApiKeyVisibility'),
   apiUrl: document.getElementById('apiUrl'),
   model: document.getElementById('model'),
   translateModel: document.getElementById('translateModel'),
@@ -185,6 +480,7 @@ const elements = {
 // Initialize
 async function init() {
   console.log('[Page Copilot] Initializing side panel...');
+  updateProviderOptions();
   await loadConfig();
   await loadHistory(); // Load stored history
   updateModelOptions();  // Refresh model options
@@ -194,17 +490,32 @@ async function init() {
   console.log('[Page Copilot] Side panel initialized');
 }
 
+/**
+ * Populate the provider selector from the provider registry.
+ */
+function updateProviderOptions() {
+  elements.apiProvider.innerHTML = PROVIDER_GROUPS
+    .map((group) => {
+      const options = group.providers
+        .filter((provider) => MODEL_CONFIG[provider])
+        .map((provider) => `<option value="${provider}">${MODEL_CONFIG[provider].name}</option>`)
+        .join('');
+      return `<optgroup label="${group.label}">${options}</optgroup>`;
+    })
+    .join('');
+}
+
 // Update model select options
 function updateModelOptions() {
   const providerConfig = MODEL_CONFIG[currentProvider];
 
-  // Update chat model options
-  elements.model.innerHTML = providerConfig.models.chat
+  // Update chat model suggestions while still allowing custom model names
+  document.getElementById('modelOptions').innerHTML = providerConfig.models.chat
     .map(m => `<option value="${m.value}">${m.label}</option>`)
     .join('');
 
-  // Update translation model options
-  elements.translateModel.innerHTML = providerConfig.models.translate
+  // Update translation model suggestions while still allowing custom model names
+  document.getElementById('translateModelOptions').innerHTML = providerConfig.models.translate
     .map(m => `<option value="${m.value}">${m.label}</option>`)
     .join('');
 }
@@ -212,25 +523,32 @@ function updateModelOptions() {
 // Switch provider
 function switchProvider(provider) {
   // Save the current provider configuration
-  providerConfigs[currentProvider] = { ...config };
+  providerConfigs[currentProvider] = {
+    apiKey: elements.apiKey.value.trim(),
+    apiUrl: elements.apiUrl.value.trim() || MODEL_CONFIG[currentProvider].defaultUrl,
+    apiFormat: MODEL_CONFIG[currentProvider].apiFormat,
+    model: elements.model.value.trim() || MODEL_CONFIG[currentProvider].defaultModel,
+    translateModel: elements.translateModel.value.trim() || MODEL_CONFIG[currentProvider].defaultTranslateModel
+  };
 
   // Switch to the new provider
   currentProvider = provider;
-  const newConfig = providerConfigs[provider];
+  const { config: newConfig } = migrateProviderConfig(providerConfigs[provider] || buildDefaultProviderConfig(provider));
+  providerConfigs[provider] = newConfig;
 
   // Refresh config
-  config = { ...newConfig };
+  config = buildRuntimeConfig(newConfig);
 
   // Refresh UI
   elements.apiProvider.value = provider;
   elements.apiKey.value = config.apiKey || '';
   elements.apiUrl.value = config.apiUrl || MODEL_CONFIG[provider].defaultUrl;
-  elements.model.value = config.model || '';
-  elements.translateModel.value = config.translateModel || '';
-  elements.translateBatchSize.value = config.translateBatchSize?.toString() || '30';
-  elements.systemPrompt.value = config.systemPrompt || '';
-  elements.contextPageCount.value = config.contextPageCount?.toString() || '10';
-  elements.retentionHours.value = config.retentionHours?.toString() || '48';
+  elements.model.value = config.model || MODEL_CONFIG[provider].defaultModel || '';
+  elements.translateModel.value = config.translateModel || MODEL_CONFIG[provider].defaultTranslateModel || '';
+  elements.translateBatchSize.value = globalSettings.translateBatchSize?.toString() || '30';
+  elements.systemPrompt.value = globalSettings.systemPrompt || '';
+  elements.contextPageCount.value = globalSettings.contextPageCount?.toString() || '10';
+  elements.retentionHours.value = globalSettings.retentionHours?.toString() || '48';
 
   // Refresh model options
   updateModelOptions();
@@ -247,34 +565,80 @@ async function loadConfig() {
   try {
     const result = await chrome.storage.local.get([
       'currentProvider',
+      'providerConfigs',
+      'globalSettings',
       'claudeConfig',
       'glmConfig'
     ]);
 
     // Load current provider
-    currentProvider = result.currentProvider || 'claude';
+    currentProvider = MODEL_CONFIG[result.currentProvider] ? result.currentProvider : 'claude';
+    let configChanged = false;
 
-    // Load per-provider configuration
+    if (result.globalSettings) {
+      globalSettings = { ...globalSettings, ...result.globalSettings };
+    } else {
+      const legacyGlobalSource = result.providerConfigs?.[currentProvider]
+        || result.claudeConfig
+        || result.glmConfig
+        || {};
+      globalSettings = {
+        translateBatchSize: parseInt(legacyGlobalSource.translateBatchSize, 10) || globalSettings.translateBatchSize,
+        systemPrompt: legacyGlobalSource.systemPrompt || globalSettings.systemPrompt,
+        contextPageCount: parseInt(legacyGlobalSource.contextPageCount, 10) || globalSettings.contextPageCount,
+        retentionHours: parseInt(legacyGlobalSource.retentionHours, 10) || globalSettings.retentionHours
+      };
+      configChanged = true;
+    }
+
+    if (result.providerConfigs) {
+      Object.entries(result.providerConfigs).forEach(([provider, storedConfig]) => {
+        if (MODEL_CONFIG[provider]) {
+          const { config: migratedConfig, changed } = migrateProviderConfig(storedConfig);
+          if (changed) configChanged = true;
+          providerConfigs[provider] = {
+            ...providerConfigs[provider],
+            ...migratedConfig,
+            apiFormat: MODEL_CONFIG[provider].apiFormat
+          };
+        }
+      });
+    }
+
+    // Load legacy per-provider configuration
     if (result.claudeConfig) {
-      providerConfigs.claude = { ...providerConfigs.claude, ...result.claudeConfig };
+      const { config: migratedConfig, changed } = migrateProviderConfig(result.claudeConfig);
+      if (changed || !result.providerConfigs?.claude) configChanged = true;
+      providerConfigs.claude = { ...providerConfigs.claude, ...migratedConfig, apiFormat: 'anthropic' };
     }
     if (result.glmConfig) {
-      providerConfigs.glm = { ...providerConfigs.glm, ...result.glmConfig };
+      const { config: migratedConfig, changed } = migrateProviderConfig(result.glmConfig);
+      if (changed || !result.providerConfigs?.glm) configChanged = true;
+      providerConfigs.glm = { ...providerConfigs.glm, ...migratedConfig, apiFormat: 'anthropic' };
+    }
+
+    if (configChanged) {
+      await chrome.storage.local.set({
+        providerConfigs,
+        globalSettings,
+        claudeConfig: providerConfigs.claude,
+        glmConfig: providerConfigs.glm
+      });
     }
 
     // Use the active provider configuration
-    config = { ...providerConfigs[currentProvider] };
+    config = buildRuntimeConfig(providerConfigs[currentProvider]);
 
     // Refresh UI
     elements.apiProvider.value = currentProvider;
     elements.apiKey.value = config.apiKey || '';
     elements.apiUrl.value = config.apiUrl || MODEL_CONFIG[currentProvider].defaultUrl;
-    elements.model.value = config.model || '';
-    elements.translateModel.value = config.translateModel || '';
-    elements.translateBatchSize.value = config.translateBatchSize?.toString() || '30';
-    elements.systemPrompt.value = config.systemPrompt || '';
-    elements.contextPageCount.value = config.contextPageCount?.toString() || '10';
-    elements.retentionHours.value = config.retentionHours?.toString() || '48';
+    elements.model.value = config.model || MODEL_CONFIG[currentProvider].defaultModel || '';
+    elements.translateModel.value = config.translateModel || MODEL_CONFIG[currentProvider].defaultTranslateModel || '';
+    elements.translateBatchSize.value = globalSettings.translateBatchSize?.toString() || '30';
+    elements.systemPrompt.value = globalSettings.systemPrompt || '';
+    elements.contextPageCount.value = globalSettings.contextPageCount?.toString() || '10';
+    elements.retentionHours.value = globalSettings.retentionHours?.toString() || '48';
 
     updateAPIStatus();
   } catch (error) {
@@ -285,13 +649,31 @@ async function loadConfig() {
 // Save configuration
 async function saveConfig() {
   const provider = elements.apiProvider.value;
+  const providerSpec = MODEL_CONFIG[provider];
+  const apiUrl = elements.apiUrl.value.trim() || providerSpec.defaultUrl;
+  const model = elements.model.value.trim() || providerSpec.defaultModel;
+  const translateModel = elements.translateModel.value.trim() || providerSpec.defaultTranslateModel;
+
+  if (!apiUrl) {
+    addSystemMessage('❌ Please enter an API URL for this provider', 'error');
+    return;
+  }
+
+  if (!model || !translateModel) {
+    addSystemMessage('❌ Please enter both chat and translation model names for this provider', 'error');
+    return;
+  }
 
   // Build configuration object
   const configToSave = {
     apiKey: elements.apiKey.value.trim(),
-    apiUrl: elements.apiUrl.value.trim() || MODEL_CONFIG[provider].defaultUrl,
-    model: elements.model.value,
-    translateModel: elements.translateModel.value || MODEL_CONFIG[provider].models.translate[0].value,
+    apiUrl,
+    apiFormat: providerSpec.apiFormat,
+    model,
+    translateModel
+  };
+
+  globalSettings = {
     translateBatchSize: parseInt(elements.translateBatchSize.value) || 30,
     systemPrompt: elements.systemPrompt.value.trim(),
     contextPageCount: parseInt(elements.contextPageCount.value) || 10,
@@ -300,12 +682,14 @@ async function saveConfig() {
 
   // Update the active provider configuration
   providerConfigs[provider] = configToSave;
-  config = configToSave;
+  config = buildRuntimeConfig(configToSave);
   currentProvider = provider;
 
   try {
     await chrome.storage.local.set({
       currentProvider: provider,
+      providerConfigs,
+      globalSettings,
       claudeConfig: providerConfigs.claude,
       glmConfig: providerConfigs.glm
     });
@@ -425,6 +809,7 @@ function bindEvents() {
   });
 
   elements.saveSettings.addEventListener('click', saveConfig);
+  elements.toggleApiKeyVisibility.addEventListener('click', toggleApiKeyVisibility);
 
   elements.summarizeBtn.addEventListener('click', handleSummarize);
   elements.translateBtn.addEventListener('click', handleTranslate);
@@ -432,6 +817,28 @@ function bindEvents() {
   elements.historyBtn.addEventListener('click', toggleHistoryPanel);
   elements.closeHistoryBtn.addEventListener('click', () => elements.historyPanel.classList.add('hidden'));
   elements.translatePageBtn.addEventListener('click', handleTranslatePage);
+
+  elements.model.addEventListener('focus', () => {
+    modelInputFocusValue = elements.model.value;
+    elements.model.value = '';
+  });
+
+  elements.model.addEventListener('blur', () => {
+    if (!elements.model.value.trim()) {
+      elements.model.value = modelInputFocusValue;
+    }
+  });
+
+  elements.translateModel.addEventListener('focus', () => {
+    translateModelInputFocusValue = elements.translateModel.value;
+    elements.translateModel.value = '';
+  });
+
+  elements.translateModel.addEventListener('blur', () => {
+    if (!elements.translateModel.value.trim()) {
+      elements.translateModel.value = translateModelInputFocusValue;
+    }
+  });
 
   chrome.tabs.onActivated.addListener(() => {
     syncTranslatePageButtonState();
@@ -484,6 +891,17 @@ function bindEvents() {
       });
     }
   });
+}
+
+/**
+ * Toggle API key visibility in the settings form.
+ */
+function toggleApiKeyVisibility() {
+  const shouldShow = elements.apiKey.type === 'password';
+  elements.apiKey.type = shouldShow ? 'text' : 'password';
+  elements.toggleApiKeyVisibility.textContent = shouldShow ? '🙈' : '👁';
+  elements.toggleApiKeyVisibility.title = shouldShow ? 'Hide API key' : 'Show API key';
+  elements.toggleApiKeyVisibility.setAttribute('aria-label', shouldShow ? 'Hide API key' : 'Show API key');
 }
 
 // Update UI state

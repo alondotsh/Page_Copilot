@@ -661,32 +661,39 @@ installTranslationNavigationHooks();
 /**
  * Build the fallback translation configuration for a provider.
  * @param {string} provider Active provider id.
- * @returns {{apiUrl: string, model: string, batchSize: number}} Default translation settings.
+ * @returns {{apiUrl: string, apiFormat: string, model: string, batchSize: number}} Default translation settings.
  */
-function getDefaultTranslationConfig(provider) {
-  if (provider === 'glm') {
-    return {
-      apiUrl: 'https://open.bigmodel.cn/api/anthropic',
-      model: 'glm-4.7',
-      batchSize: 30
-    };
-  }
+const TRANSLATION_PROVIDER_DEFAULTS = {
+  claude: { apiUrl: 'https://api.anthropic.com', apiFormat: 'anthropic', model: 'claude-haiku-4-5', batchSize: 30 },
+  glm: { apiUrl: 'https://open.bigmodel.cn/api/anthropic', apiFormat: 'anthropic', model: 'glm-4.7', batchSize: 30 },
+  openai: { apiUrl: 'https://api.openai.com/v1', apiFormat: 'openai', model: 'gpt-5.4-mini', batchSize: 30 },
+  gemini: { apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiFormat: 'openai', model: 'gemini-2.5-flash', batchSize: 30 },
+  grok: { apiUrl: 'https://api.x.ai/v1', apiFormat: 'openai', model: 'grok-4.20', batchSize: 30 },
+  deepseek: { apiUrl: 'https://api.deepseek.com', apiFormat: 'openai', model: 'deepseek-v4-flash', batchSize: 30 },
+  qwen: { apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiFormat: 'openai', model: 'qwen3.6-plus', batchSize: 30 },
+  kimi: { apiUrl: 'https://api.moonshot.cn/v1', apiFormat: 'openai', model: 'kimi-k2.6', batchSize: 30 },
+  openrouter: { apiUrl: 'https://openrouter.ai/api/v1', apiFormat: 'openai', model: 'openai/gpt-5.4-mini', batchSize: 30 },
+  siliconflow: { apiUrl: 'https://api.siliconflow.cn/v1', apiFormat: 'openai', model: 'deepseek-ai/DeepSeek-V4-Flash', batchSize: 30 },
+  minimax: { apiUrl: 'https://api.minimax.io/v1', apiFormat: 'openai', model: 'minimax-m2.7', batchSize: 30 },
+  mimo: { apiUrl: '', apiFormat: 'openai', model: 'mimo-v2-flash', batchSize: 30 },
+  customOpenAI: { apiUrl: '', apiFormat: 'openai', model: '', batchSize: 30 },
+  customAnthropic: { apiUrl: '', apiFormat: 'anthropic', model: '', batchSize: 30 }
+};
 
-  return {
-    apiUrl: 'https://api.anthropic.com',
-    model: 'claude-3-5-haiku-20241022',
-    batchSize: 30
-  };
+function getDefaultTranslationConfig(provider) {
+  return TRANSLATION_PROVIDER_DEFAULTS[provider] || TRANSLATION_PROVIDER_DEFAULTS.claude;
 }
 
 /**
  * Read the active provider configuration used by full-page translation.
- * @returns {Promise<{apiKey: string, apiUrl: string, model: string, batchSize: number}>} Translation configuration.
+ * @returns {Promise<{apiKey: string, apiUrl: string, apiFormat: string, model: string, batchSize: number}>} Translation configuration.
  */
 async function getTranslationConfig() {
   return new Promise((resolve) => {
     chrome.storage.local.get([
       'currentProvider',
+      'providerConfigs',
+      'globalSettings',
       'claudeConfig',
       'glmConfig',
       'apiKey',
@@ -695,14 +702,16 @@ async function getTranslationConfig() {
       'translateBatchSize'
     ], (result) => {
       const provider = result.currentProvider || 'claude';
-      const providerConfig = provider === 'glm' ? result.glmConfig : result.claudeConfig;
+      const providerConfig = result.providerConfigs?.[provider]
+        || (provider === 'glm' ? result.glmConfig : result.claudeConfig);
       const defaults = getDefaultTranslationConfig(provider);
 
       resolve({
         apiKey: providerConfig?.apiKey || result.apiKey || '',
         apiUrl: providerConfig?.apiUrl || result.apiUrl || defaults.apiUrl,
+        apiFormat: providerConfig?.apiFormat || defaults.apiFormat,
         model: providerConfig?.translateModel || result.translateModel || defaults.model,
-        batchSize: parseInt(providerConfig?.translateBatchSize || result.translateBatchSize, 10) || defaults.batchSize
+        batchSize: parseInt(result.globalSettings?.translateBatchSize || providerConfig?.translateBatchSize || result.translateBatchSize, 10) || defaults.batchSize
       });
     });
   });
@@ -711,11 +720,23 @@ async function getTranslationConfig() {
 // 获取模型显示名称
 function getModelDisplayName(modelId) {
   const modelNames = {
-    'claude-3-5-haiku-20241022': 'Haiku',
+    'claude-haiku-4-5': 'Claude Haiku 4.5',
     'claude-sonnet-4-20250514': 'Sonnet 4',
     'claude-opus-4-20250514': 'Opus 4',
     'glm-4.7': 'GLM-4.7',
-    'glm-4.5-air': 'GLM-4.5 Air'
+    'glm-4.5-air': 'GLM-4.5 Air',
+    'gpt-5.4-mini': 'GPT-5.4 Mini',
+    'gpt-5-mini': 'GPT-5 Mini',
+    'gpt-5.4-nano': 'GPT-5.4 Nano',
+    'gemini-2.5-flash': 'Gemini 2.5 Flash',
+    'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite',
+    'grok-4.20': 'Grok 4.20',
+    'deepseek-v4-flash': 'DeepSeek V4 Flash',
+    'qwen3.6-plus': 'Qwen3.6 Plus',
+    'kimi-k2.6': 'Kimi K2.6',
+    'kimi-k2.5': 'Kimi K2.5',
+    'minimax-m2.7': 'MiniMax M2.7',
+    'mimo-v2-flash': 'MiMo V2 Flash'
   };
   return modelNames[modelId] || modelId;
 }

@@ -24,14 +24,16 @@
       <div class="form-group">
         <label for="apiProvider">API Provider:</label>
         <select id="apiProvider">
-          <option value="claude">Anthropic Claude</option>
-          <option value="glm">Zhipu GLM</option>
+          <!-- Populated dynamically from provider presets -->
         </select>
         <small>Switching providers will automatically load the matching configuration.</small>
       </div>
       <div class="form-group">
         <label for="apiKey">API Key:</label>
-        <input type="password" id="apiKey" placeholder="Enter API key">
+        <div class="api-key-field">
+          <input type="password" id="apiKey" placeholder="Enter API key">
+          <button type="button" id="toggleApiKeyVisibility" class="api-key-toggle" title="Show API key" aria-label="Show API key">👁</button>
+        </div>
       </div>
       <div class="form-group">
         <label for="apiUrl">API URL:</label>
@@ -40,16 +42,15 @@
       </div>
       <div class="form-group">
         <label for="model">Chat Model:</label>
-        <select id="model">
-          <!-- Populated dynamically based on the selected provider -->
-        </select>
+        <input type="text" id="model" list="modelOptions" placeholder="Model name">
+        <datalist id="modelOptions"></datalist>
+        <small>Select a preset or type a custom model name.</small>
       </div>
       <div class="form-group">
         <label for="translateModel">Translation Model:</label>
-        <select id="translateModel">
-          <!-- Populated dynamically based on the selected provider -->
-        </select>
-        <small>This model is used for full-page translation.</small>
+        <input type="text" id="translateModel" list="translateModelOptions" placeholder="Translation model name">
+        <datalist id="translateModelOptions"></datalist>
+        <small>This model is used for full-page translation. Select a preset or type a custom model name.</small>
       </div>
       <div class="form-group">
         <label for="translateBatchSize">Translation Batch Size:</label>
@@ -128,7 +129,7 @@
             <div class="feedback-card">
               <div class="feedback-copy">
                 <p><strong>Feedback & Suggestions</strong></p>
-                <p>Open-source, local-first, and no account required. Bring your own Claude or GLM API key; more providers can be added over time.</p>
+                <p>Open-source, local-first, and no account required. Bring your own model API key.</p>
                 <p>If you run into issues or have ideas for improvement, join the conversation on GitHub:</p>
                 <p><a href="https://github.com/alondotsh/Page_Copilot" target="_blank" rel="noreferrer">github.com/alondotsh/Page_Copilot</a></p>
                 <p>For updates or informal feedback:<br>X: <a href="https://x.com/alondotsh" target="_blank" rel="noreferrer">@alondotsh</a><br>WeChat Official Account: alondotsh</p>

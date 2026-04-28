@@ -206,24 +206,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         try {
           const { text, config } = request;
           console.log('[Page Copilot] Proxy translation request:', config.apiUrl);
+          const apiFormat = getApiFormat(config);
+          const isOpenAICompatible = apiFormat === 'openai';
+          const prompt = `Translate the text below into Simplified Chinese. If the source text is already Chinese, translate it into English. Return only the translation without any explanation or prefix.
 
-          const response = await fetch(`${config.apiUrl}/v1/messages`, {
+${text}`;
+
+          const response = await fetch(buildApiEndpoint(config.apiUrl, isOpenAICompatible ? '/chat/completions' : '/v1/messages'), {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': config.apiKey,
-              'anthropic-version': '2023-06-01'
-            },
-            body: JSON.stringify({
-              model: config.model,
-              max_tokens: 4096,
-              messages: [{
-                role: 'user',
-                content: `Translate the text below into Simplified Chinese. If the source text is already Chinese, translate it into English. Return only the translation without any explanation or prefix.
-
-${text}`
-              }]
-            })
+            headers: isOpenAICompatible
+              ? {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${config.apiKey}`
+                }
+              : {
+                  'Content-Type': 'application/json',
+                  'x-api-key': config.apiKey,
+                  'anthropic-version': '2023-06-01'
+                },
+            body: JSON.stringify(isOpenAICompatible
+              ? {
+                  model: config.model,
+                  max_tokens: 4096,
+                  messages: [{ role: 'user', content: prompt }]
+                }
+              : {
+                  model: config.model,
+                  max_tokens: 4096,
+                  messages: [{ role: 'user', content: prompt }]
+                })
           });
 
           if (!response.ok) {
@@ -234,7 +245,9 @@ ${text}`
           }
 
           const data = await response.json();
-          const translatedText = data.content[0].text;
+          const translatedText = isOpenAICompatible
+            ? data.choices?.[0]?.message?.content
+            : data.content?.[0]?.text;
           console.log('[Page Copilot] Translation succeeded');
           sendResponse({ success: true, translatedText });
         } catch (error) {
@@ -325,35 +338,144 @@ chrome.runtime.onConnect.addListener((port) => {
   }
 });
 
-// 流式调用 Claude API
+/**
+ * Join a configurable API base URL with an endpoint path.
+ * @param {string} apiUrl Provider base URL.
+ * @param {string} path Endpoint path.
+ * @returns {string} Full endpoint URL.
+ */
+function buildApiEndpoint(apiUrl, path) {
+  return `${(apiUrl || '').replace(/\/+$/, '')}${path}`;
+}
+
+/**
+ * Read the configured API compatibility format.
+ * @param {object} config Provider configuration.
+ * @returns {'anthropic'|'openai'} API format.
+ */
+function getApiFormat(config) {
+  return config.apiFormat === 'openai' ? 'openai' : 'anthropic';
+}
+
+/**
+ * Build OpenAI-compatible messages from conversation and system context.
+ * @param {object[]} messages Conversation messages.
+ * @param {string} systemPrompt Optional system prompt.
+ * @returns {object[]} OpenAI-compatible messages.
+ */
+function buildOpenAIMessages(messages, systemPrompt) {
+  const output = [];
+  if (systemPrompt) {
+    output.push({ role: 'system', content: systemPrompt });
+  }
+  return output.concat(messages.map((message) => ({
+    role: message.role,
+    content: message.content
+  })));
+}
+
+/**
+ * Extract streamed text from one provider SSE payload.
+ * @param {object} data Parsed stream payload.
+ * @param {'anthropic'|'openai'} apiFormat API format.
+ * @returns {string} Text delta.
+ */
+function extractStreamText(data, apiFormat) {
+  if (apiFormat === 'openai') {
+    return data.choices?.[0]?.delta?.content || '';
+  }
+
+  if (data.type === 'content_block_delta' && data.delta?.text) {
+    return data.delta.text;
+  }
+
+  return '';
+}
+
+/**
+ * Stream an SSE response and pass text deltas to the caller.
+ * @param {Response} response Fetch response.
+ * @param {'anthropic'|'openai'} apiFormat API format.
+ * @param {(chunk: string) => void} onText Text callback.
+ * @param {AbortSignal} [abortSignal] Optional abort signal.
+ */
+async function readTextStream(response, apiFormat, onText, abortSignal) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    if (abortSignal?.aborted) {
+      await reader.cancel();
+      break;
+    }
+
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+
+      const dataStr = line.slice(6).trim();
+      if (!dataStr || dataStr === '[DONE]') continue;
+
+      try {
+        const data = JSON.parse(dataStr);
+        const text = extractStreamText(data, apiFormat);
+        if (text) onText(text);
+      } catch (error) {
+        console.warn('Failed to parse stream data:', error);
+      }
+    }
+  }
+}
+
+// 流式调用模型 API
 async function streamClaudeAPI(messages, config, port) {
   const { apiKey, apiUrl, model, systemPrompt } = config;
+  const apiFormat = getApiFormat(config);
 
   if (!apiKey) {
     throw new Error('Please configure an API key first');
   }
 
-  const requestBody = {
-    model: model || 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
-    messages: messages,
-    stream: true // 开启流式
-  };
+  const isOpenAICompatible = apiFormat === 'openai';
+  const requestBody = isOpenAICompatible
+    ? {
+        model,
+        max_tokens: 4096,
+        messages: buildOpenAIMessages(messages, systemPrompt),
+        stream: true
+      }
+    : {
+        model: model || 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages,
+        stream: true
+      };
 
-  // 如果有系统提示词，添加到请求中
-  if (systemPrompt) {
+  if (!isOpenAICompatible && systemPrompt) {
     requestBody.system = systemPrompt;
   }
 
-  console.log('[Page Copilot] Starting streaming request:', { model: requestBody.model });
+  console.log('[Page Copilot] Starting streaming request:', { model: requestBody.model, apiFormat });
 
-  const response = await fetch(`${apiUrl}/v1/messages`, {
+  const response = await fetch(buildApiEndpoint(apiUrl, isOpenAICompatible ? '/chat/completions' : '/v1/messages'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
+    headers: isOpenAICompatible
+      ? {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        }
+      : {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
     body: JSON.stringify(requestBody)
   });
 
@@ -362,35 +484,10 @@ async function streamClaudeAPI(messages, config, port) {
     throw new Error(`API 请求失败: ${response.status} - ${errorText}`);
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // 保留最后一个可能不完整的行
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6);
-          if (dataStr === '[DONE]') continue;
-
-          try {
-            const data = JSON.parse(dataStr);
-            if (data.type === 'content_block_delta' && data.delta.text) {
-              port.postMessage({ type: 'chunk', content: data.delta.text });
-            }
-          } catch (e) {
-            console.warn('Failed to parse stream data:', e);
-          }
-        }
-      }
-    }
+    await readTextStream(response, apiFormat, (text) => {
+      port.postMessage({ type: 'chunk', content: text });
+    });
     port.postMessage({ type: 'done' });
   } catch (error) {
     console.error('Stream read error:', error);
@@ -404,6 +501,7 @@ async function streamClaudeAPI(messages, config, port) {
 // isConnected: 检查端口是否仍连接的函数
 async function streamTranslateAPI(texts, config, port, abortSignal, isConnected) {
   const { apiKey, apiUrl, model } = config;
+  const apiFormat = getApiFormat(config);
 
   if (!apiKey) {
     throw new Error('Please configure an API key first');
@@ -426,8 +524,9 @@ ${textList}`;
 
   console.log('[Page Copilot] Batch translation request, paragraph count:', texts.length);
 
+  const isOpenAICompatible = apiFormat === 'openai';
   const requestBody = {
-    model: model || 'claude-3-5-haiku-20241022',
+    model: model || (isOpenAICompatible ? '' : 'claude-3-5-haiku-20241022'),
     max_tokens: 8192,
     messages: [{
       role: 'user',
@@ -436,13 +535,18 @@ ${textList}`;
     stream: true
   };
 
-  const response = await fetch(`${apiUrl}/v1/messages`, {
+  const response = await fetch(buildApiEndpoint(apiUrl, isOpenAICompatible ? '/chat/completions' : '/v1/messages'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
+    headers: isOpenAICompatible
+      ? {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        }
+      : {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
     body: JSON.stringify(requestBody),
     signal: abortSignal  // 支持取消请求
   });
@@ -498,8 +602,9 @@ ${textList}`;
 
           try {
             const data = JSON.parse(dataStr);
-            if (data.type === 'content_block_delta' && data.delta?.text) {
-              fullText += data.delta.text;
+            const textDelta = extractStreamText(data, apiFormat);
+            if (textDelta) {
+              fullText += textDelta;
 
               // 尝试解析已完成的翻译
               // 查找格式：[pN]: 翻译内容\n\n 或 [pN]: 翻译内容（后面是下一个[pN]）
