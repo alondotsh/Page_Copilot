@@ -410,6 +410,18 @@ function buildDefaultProviderConfig(provider) {
 let providerConfigs = Object.fromEntries(
   Object.keys(MODEL_CONFIG).map((provider) => [provider, buildDefaultProviderConfig(provider)])
 );
+let providerDraftConfigs = cloneProviderConfigs(providerConfigs);
+
+/**
+ * Clone per-provider configuration objects.
+ * @param {object} source Provider configuration map.
+ * @returns {object} Cloned provider configuration map.
+ */
+function cloneProviderConfigs(source) {
+  return Object.fromEntries(
+    Object.entries(source).map(([provider, providerConfig]) => [provider, { ...providerConfig }])
+  );
+}
 
 const LEGACY_MODEL_MIGRATIONS = {
   'claude-3-5-haiku-20241022': 'claude-haiku-4-5',
@@ -520,10 +532,15 @@ function updateModelOptions() {
     .join('');
 }
 
-// Switch provider
-function switchProvider(provider) {
-  // Save the current provider configuration
-  providerConfigs[currentProvider] = {
+/**
+ * Switch the active provider and persist the provider choice only.
+ * @param {string} provider Provider id.
+ */
+async function switchProvider(provider) {
+  if (!MODEL_CONFIG[provider]) return;
+
+  // Keep unsaved edits in memory only so switching back does not lose form state.
+  providerDraftConfigs[currentProvider] = {
     apiKey: elements.apiKey.value.trim(),
     apiUrl: elements.apiUrl.value.trim() || MODEL_CONFIG[currentProvider].defaultUrl,
     apiFormat: MODEL_CONFIG[currentProvider].apiFormat,
@@ -533,8 +550,16 @@ function switchProvider(provider) {
 
   // Switch to the new provider
   currentProvider = provider;
-  const { config: newConfig } = migrateProviderConfig(providerConfigs[provider] || buildDefaultProviderConfig(provider));
-  providerConfigs[provider] = newConfig;
+  try {
+    await chrome.storage.local.set({ currentProvider: provider });
+  } catch (error) {
+    console.warn('[Page Copilot] Failed to persist provider selection:', error);
+  }
+
+  const { config: newConfig } = migrateProviderConfig(
+    providerDraftConfigs[provider] || providerConfigs[provider] || buildDefaultProviderConfig(provider)
+  );
+  providerDraftConfigs[provider] = newConfig;
 
   // Refresh config
   config = buildRuntimeConfig(newConfig);
@@ -626,6 +651,8 @@ async function loadConfig() {
       });
     }
 
+    providerDraftConfigs = cloneProviderConfigs(providerConfigs);
+
     // Use the active provider configuration
     config = buildRuntimeConfig(providerConfigs[currentProvider]);
 
@@ -682,6 +709,7 @@ async function saveConfig() {
 
   // Update the active provider configuration
   providerConfigs[provider] = configToSave;
+  providerDraftConfigs[provider] = { ...configToSave };
   config = buildRuntimeConfig(configToSave);
   currentProvider = provider;
 
@@ -805,7 +833,7 @@ function bindEvents() {
 
   // Provider switching
   elements.apiProvider.addEventListener('change', (e) => {
-    switchProvider(e.target.value);
+    void switchProvider(e.target.value);
   });
 
   elements.saveSettings.addEventListener('click', saveConfig);
@@ -1058,9 +1086,28 @@ async function getCurrentTab() {
   return null;
 }
 
+/**
+ * Inject the latest extension scripts into a tab when an existing page missed them.
+ * @param {number} tabId Current tab id.
+ * @returns {Promise<void>}
+ */
+async function injectPageScripts(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['video-transcript.js', 'content.js']
+  });
+  await chrome.scripting.insertCSS({
+    target: { tabId },
+    files: ['floating-toolbar.css']
+  });
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+
 // Get page content
 async function getPageContent() {
   const tab = await getCurrentTab();
+  if (!tab?.id) return null;
+
   const isSupportedVideoPage = isSupportedVideoUrl(tab?.url || '');
   lastVideoTranscriptDiagnostic = null;
   const videoTranscript = await getVideoTranscriptContent(tab);
@@ -1068,16 +1115,41 @@ async function getPageContent() {
     return videoTranscript;
   }
 
-  return new Promise((resolve) => {
+  const readPageContent = () => new Promise((resolve, reject) => {
     chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' }, (response) => {
-      const pageContent = response?.data;
-      if (pageContent && isSupportedVideoPage) {
-        pageContent.videoTranscriptStatus = 'unavailable';
-        pageContent.videoTranscriptDiagnostic = lastVideoTranscriptDiagnostic;
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
       }
-      resolve(pageContent);
+
+      resolve(response?.data || null);
     });
   });
+
+  try {
+    const pageContent = await readPageContent();
+    if (pageContent && isSupportedVideoPage) {
+      pageContent.videoTranscriptStatus = 'unavailable';
+      pageContent.videoTranscriptDiagnostic = lastVideoTranscriptDiagnostic;
+    }
+    return pageContent;
+  } catch (error) {
+    console.log('[Page Copilot] Content script unavailable, injecting latest scripts...', error);
+  }
+
+  try {
+    await injectPageScripts(tab.id);
+    const pageContent = await readPageContent();
+    if (pageContent && isSupportedVideoPage) {
+      pageContent.videoTranscriptStatus = 'unavailable';
+      pageContent.videoTranscriptDiagnostic = lastVideoTranscriptDiagnostic;
+    }
+    return pageContent;
+  } catch (error) {
+    console.warn('[Page Copilot] Failed to read page content after script injection:', error);
+    return null;
+  }
 }
 
 /**
@@ -1626,7 +1698,7 @@ async function handleSummarize() {
 
   const pageContent = await getPageContent();
   if (!pageContent || !pageContent.text) {
-    addSystemMessage('❌ Unable to retrieve page content', 'error');
+    addSystemMessage('❌ Unable to read this page. Please refresh the page and try again.', 'error');
     setButtonsDisabled(false);
     return;
   }
@@ -1780,17 +1852,7 @@ async function handleTranslatePage() {
     // If this fails, the content script may be missing; inject it and retry
     console.log('[Page Copilot] Content script missing, attempting injection...');
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js']
-      });
-      await chrome.scripting.insertCSS({
-        target: { tabId: tab.id },
-        files: ['floating-toolbar.css']
-      });
-      // Wait for the script to load
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // Retry the message
+      await injectPageScripts(tab.id);
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
       applyTranslatePageResult(response);
     } catch (retryError) {
