@@ -565,9 +565,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         break;
 
       case 'translatePage':
-        // 整页翻译
-        startPageTranslation();
-        sendResponse({ success: true });
+        startPageTranslation()
+          .then((result) => sendResponse({ success: true, ...result }))
+          .catch((error) => {
+            console.error('[Page Copilot] Page translation failed:', error);
+            sendResponse({ success: false, error: error.message });
+          });
+        break;
+
+      case 'getPageTranslationState':
+        sendResponse({
+          success: true,
+          enabled: isTranslationEnabled,
+          url: window.location.href
+        });
         break;
 
       default:
@@ -594,12 +605,58 @@ let translationConfig = null;      // 缓存配置
 let translationStats = { completed: 0, total: 0 };  // 统计信息
 let translatedElementsSet = new Set(); // 已翻译的元素（避免重复）
 let allTranslatableElements = [];  // 所有可翻译的元素
+let translationInFlightCount = 0;
+let translationTextCache = new Map();
+let translationCompletionShown = false;
+let translationRetryCounts = new WeakMap();
+let translationSkippedCount = 0;
+let translationPageUrl = window.location.href;
+
+const TRANSLATION_MAX_CONCURRENT_BATCHES = 2;
+const TRANSLATION_MAX_BATCH_CHARS = 6000;
+const TRANSLATION_PREFETCH_MARGIN = '2000px 0px';
 
 // 需要翻译的元素选择器（只选主要内容，避免碎片化）
-const TRANSLATABLE_SELECTORS = 'p, h1, h2, h3, h4, h5, h6, blockquote, figcaption, article > div, .article-content, .post-content, .entry-content, main p, [role="main"] p';
+const TRANSLATABLE_SELECTORS = 'p, li, dd, dt, td, th, h1, h2, h3, h4, h5, h6, blockquote, figcaption, article > div, .article-content, .post-content, .entry-content, main p, [role="main"] p';
 
 // 排除的元素选择器
 const EXCLUDE_SELECTORS = 'script, style, noscript, iframe, code, pre, .ai-translation, .ai-floating-toolbar, input, textarea, select, nav, header, footer, aside, .sidebar, .menu, .nav, .advertisement, .ad, .comment, .comments';
+
+/**
+ * Reset page translation when a single-page app changes URL without reloading.
+ */
+function resetTranslationOnUrlChange() {
+  if (window.location.href === translationPageUrl) return;
+
+  translationPageUrl = window.location.href;
+  if (isTranslationEnabled) {
+    stopPageTranslation();
+  }
+}
+
+/**
+ * Install lightweight URL-change hooks for SPA navigation.
+ */
+function installTranslationNavigationHooks() {
+  if (window.__pageCopilotTranslationNavigationHooksInstalled) return;
+  window.__pageCopilotTranslationNavigationHooksInstalled = true;
+
+  const wrapHistoryMethod = (methodName) => {
+    const originalMethod = history[methodName];
+    history[methodName] = function wrappedHistoryMethod(...args) {
+      const result = originalMethod.apply(this, args);
+      setTimeout(resetTranslationOnUrlChange, 0);
+      return result;
+    };
+  };
+
+  wrapHistoryMethod('pushState');
+  wrapHistoryMethod('replaceState');
+  window.addEventListener('popstate', resetTranslationOnUrlChange);
+  window.addEventListener('hashchange', resetTranslationOnUrlChange);
+}
+
+installTranslationNavigationHooks();
 
 /**
  * Build the fallback translation configuration for a provider.
@@ -707,30 +764,68 @@ async function translateTextsStream(texts, config, onTranslation) {
   });
 }
 
-// 检查元素是否应该被翻译
-function shouldTranslate(element) {
-  // 已翻译的跳过
+/**
+ * Normalize visible text before batching, deduping, and caching translations.
+ * @param {string} text Raw visible text.
+ * @returns {string} Normalized text.
+ */
+function normalizeTranslationText(text) {
+  return (text || '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Check whether text is meaningful enough to translate.
+ * @param {string} text Normalized text.
+ * @returns {boolean} Whether the text should be translated.
+ */
+function isMeaningfulTranslationText(text) {
+  if (!text || text.length < 5) return false;
+  return !/^[\d\s\.,\-\+\*\/\=\%\$\#\@\!\?\:\;\(\)\[\]\{\}]+$/.test(text);
+}
+
+/**
+ * Read normalized text from a translatable element.
+ * @param {Element} element Candidate element.
+ * @returns {string} Normalized visible text.
+ */
+function getElementTranslationText(element) {
+  return normalizeTranslationText(element.innerText);
+}
+
+/**
+ * Check basic element eligibility before the leaf-node filter is applied.
+ * @param {Element} element Candidate element.
+ * @returns {boolean} Whether the element is eligible for translation.
+ */
+function isEligibleTranslationElement(element) {
   if (element.classList.contains('ai-translated') || element.classList.contains('ai-translation')) {
     return false;
   }
 
-  // 排除的元素
   if (element.closest(EXCLUDE_SELECTORS)) {
     return false;
   }
 
-  // 文本太短的跳过
-  const text = element.innerText?.trim();
-  if (!text || text.length < 5) {
-    return false;
-  }
+  return isMeaningfulTranslationText(getElementTranslationText(element));
+}
 
-  // 纯数字/符号跳过
-  if (/^[\d\s\.,\-\+\*\/\=\%\$\#\@\!\?\:\;\(\)\[\]\{\}]+$/.test(text)) {
-    return false;
-  }
+/**
+ * Check whether an element contains a nested translatable text block.
+ * @param {Element} element Candidate parent element.
+ * @returns {boolean} Whether a child should be translated instead.
+ */
+function hasNestedTranslatableElement(element) {
+  return Array.from(element.querySelectorAll(TRANSLATABLE_SELECTORS))
+    .some((child) => child !== element && isEligibleTranslationElement(child));
+}
 
-  return true;
+/**
+ * Check whether an element should be translated.
+ * @param {Element} element Candidate element.
+ * @returns {boolean} Whether the element should be translated.
+ */
+function shouldTranslate(element) {
+  return isEligibleTranslationElement(element) && !hasNestedTranslatableElement(element);
 }
 
 // 插入翻译结果（行内显示，类似沉浸式翻译）
@@ -748,46 +843,20 @@ function insertTranslation(element, translatedText) {
   element.appendChild(translationSpan);
 }
 
-// 批量翻译（一次请求，流式返回，边翻译边显示）
-async function translateBatch(elements, config, onProgress) {
-  const BATCH_SIZE = config.batchSize || 15; // 使用配置的批次大小
-  let completed = 0;
-  const total = elements.length;
+/**
+ * Mark a translated element and refresh visible progress.
+ * @param {Element} element Translated element.
+ * @param {string} translatedText Translation text.
+ * @param {string} modelName Model display name.
+ * @param {number} batchSize Configured paragraph batch size.
+ */
+function applyTranslationResult(element, translatedText, modelName, batchSize) {
+  if (!isTranslationEnabled) return;
+  if (!element || !translatedText || translatedElementsSet.has(element)) return;
 
-  // 创建元素ID映射
-  const elementMap = new Map();
-  elements.forEach((el, index) => {
-    elementMap.set(`p${index}`, el);
-  });
-
-  // 分批处理（每批一次API调用）
-  for (let i = 0; i < elements.length; i += BATCH_SIZE) {
-    const batchElements = elements.slice(i, i + BATCH_SIZE);
-    const batchStartIndex = i;
-
-    // 准备批量翻译的文本
-    const texts = batchElements.map((el, idx) => ({
-      id: `p${batchStartIndex + idx}`,
-      text: el.innerText.trim()
-    }));
-
-    console.log(`[Page Copilot] Starting translation batch ${Math.floor(i / BATCH_SIZE) + 1} with ${texts.length} paragraphs`);
-
-    try {
-      await translateTextsStream(texts, config, (id, translatedText) => {
-        // 流式回调：每翻译完一个段落就立即显示
-        const element = elementMap.get(id);
-        if (element && translatedText) {
-          insertTranslation(element, translatedText);
-          completed++;
-          onProgress(completed, total);
-        }
-      });
-    } catch (error) {
-      console.error('[Page Copilot] Translation batch failed:', error);
-      // 继续下一批
-    }
-  }
+  insertTranslation(element, translatedText);
+  translatedElementsSet.add(element);
+  translationStats.completed++;
 }
 
 // 开始整页翻译（懒加载模式）
@@ -798,7 +867,7 @@ async function startPageTranslation() {
     // 已开启翻译，关闭并移除
     console.log('[Page Copilot] Disabling translation mode');
     stopPageTranslation();
-    return;
+    return { mode: 'restored', enabled: false };
   }
 
   const config = await getTranslationConfig();
@@ -806,7 +875,7 @@ async function startPageTranslation() {
 
   if (!config.apiKey) {
     showToast('❌ Please configure an API key in the extension settings first');
-    return;
+    return { mode: 'error', enabled: false, error: 'Please configure an API key first' };
   }
 
   // 缓存配置
@@ -821,7 +890,7 @@ async function startPageTranslation() {
 
   if (allTranslatableElements.length === 0) {
     showToast('⚠️ No translatable content was found on this page');
-    return;
+    return { mode: 'empty', enabled: false, error: 'No translatable content was found on this page' };
   }
 
   // 初始化统计
@@ -830,6 +899,11 @@ async function startPageTranslation() {
   pendingElements = [];
   pendingElementsSet.clear();
   isTranslating = false;
+  translationInFlightCount = 0;
+  translationTextCache.clear();
+  translationCompletionShown = false;
+  translationRetryCounts = new WeakMap();
+  translationSkippedCount = 0;
 
   // 开启翻译模式
   isTranslationEnabled = true;
@@ -837,13 +911,11 @@ async function startPageTranslation() {
   const modelName = getModelDisplayName(config.model);
   console.log(`[Page Copilot] Lazy translation enabled for ${allTranslatableElements.length} paragraphs, model: ${modelName}`);
 
-  // 显示进度条
-  showTranslationProgress(0, allTranslatableElements.length, modelName, config.batchSize);
-
   // 创建 IntersectionObserver 监听元素进入视口
   setupTranslationObserver();
 
-  showToast('🌍 Lazy translation is enabled. Scroll to translate the page progressively.');
+  showToast('✅ Page translation enabled. Scroll down to translate more.');
+  return { mode: 'enabled', enabled: true };
 }
 
 // 停止翻译并清理
@@ -863,12 +935,14 @@ function stopPageTranslation() {
   pendingElements = [];
   pendingElementsSet.clear();
   isTranslating = false;
+  translationInFlightCount = 0;
+  translationCompletionShown = false;
+  translationRetryCounts = new WeakMap();
+  translationSkippedCount = 0;
   translatedElementsSet.clear();
   allTranslatableElements = [];
   translationStats = { completed: 0, total: 0 };
   translationConfig = null;
-
-  hideTranslationProgress();
 }
 
 // 设置 IntersectionObserver
@@ -903,8 +977,7 @@ function setupTranslationObserver() {
       processTranslationQueue();
     }
   }, {
-    // 提前 500px 开始加载，让翻译更平滑
-    rootMargin: '500px 0px',
+    rootMargin: TRANSLATION_PREFETCH_MARGIN,
     threshold: 0.1
   });
 
@@ -916,78 +989,169 @@ function setupTranslationObserver() {
   console.log('[Page Copilot] IntersectionObserver is watching', allTranslatableElements.length, 'elements');
 }
 
-// 处理翻译队列
-async function processTranslationQueue() {
-  // 如果正在翻译或队列为空，跳过
-  if (isTranslating || pendingElements.length === 0 || !isTranslationEnabled) {
+/**
+ * Collect the next translation batch using paragraph and character budgets.
+ * @param {object} config Translation configuration.
+ * @param {string} modelName Model display name.
+ * @returns {{elementMap: Map<string, Element>, texts: {id: string, text: string}[], batchSize: number}} Batch payload.
+ */
+function collectNextTranslationBatch(config, modelName) {
+  const batchSize = config.batchSize || 30;
+  const elementMap = new Map();
+  const texts = [];
+  let charCount = 0;
+
+  while (pendingElements.length > 0 && texts.length < batchSize) {
+    const element = pendingElements.shift();
+    pendingElementsSet.delete(element);
+
+    if (!element || translatedElementsSet.has(element)) continue;
+
+    const text = getElementTranslationText(element);
+    if (!isMeaningfulTranslationText(text)) continue;
+
+    const cachedTranslation = translationTextCache.get(text);
+    if (cachedTranslation) {
+      applyTranslationResult(element, cachedTranslation, modelName, batchSize);
+      continue;
+    }
+
+    if (texts.length > 0 && charCount + text.length > TRANSLATION_MAX_BATCH_CHARS) {
+      pendingElements.unshift(element);
+      pendingElementsSet.add(element);
+      break;
+    }
+
+    const id = `p${texts.length}`;
+    elementMap.set(id, element);
+    texts.push({ id, text });
+    charCount += text.length;
+  }
+
+  return { elementMap, texts, batchSize };
+}
+
+/**
+ * Check whether the current translation run has completed.
+ */
+function maybeFinishTranslation() {
+  if (
+    translationStats.completed >= translationStats.total
+    && isTranslationEnabled
+    && translationInFlightCount === 0
+    && pendingElements.length === 0
+    && !translationCompletionShown
+  ) {
+    translationCompletionShown = true;
+    const skippedText = translationSkippedCount > 0 ? ` (${translationSkippedCount} skipped)` : '';
+    showToast(`✅ Translation complete. ${translationStats.completed} paragraphs processed${skippedText}.`);
+  }
+}
+
+/**
+ * Requeue a missing translation once, then mark it as processed to avoid
+ * permanently stalled progress when a model omits an item from its response.
+ * @param {Element} element Element whose translation did not arrive.
+ * @param {string} reason Reason used for debug logging.
+ * @param {string} modelName Model display name.
+ * @param {number} batchSize Configured paragraph batch size.
+ */
+function retryOrSkipTranslationElement(element, reason, modelName, batchSize) {
+  if (!isTranslationEnabled || !element || translatedElementsSet.has(element)) return;
+
+  const retryCount = translationRetryCounts.get(element) || 0;
+  if (retryCount < 1) {
+    translationRetryCounts.set(element, retryCount + 1);
+    if (!pendingElementsSet.has(element)) {
+      pendingElements.push(element);
+      pendingElementsSet.add(element);
+    }
+    console.warn('[Page Copilot] Requeued missing translation:', reason);
     return;
   }
 
-  isTranslating = true;
+  translatedElementsSet.add(element);
+  translationSkippedCount++;
+  translationStats.completed++;
+  console.warn('[Page Copilot] Skipped untranslated element after retry:', reason);
+}
 
-  const config = translationConfig;
-  const batchSize = config.batchSize || 15;
-  const modelName = getModelDisplayName(config.model);
+/**
+ * Translate one batch and update queue state after it finishes.
+ * @param {{elementMap: Map<string, Element>, texts: {id: string, text: string}[], batchSize: number}} batch Batch payload.
+ * @param {object} config Translation configuration.
+ * @param {string} modelName Model display name.
+ */
+async function runTranslationBatch(batch, config, modelName) {
+  translationInFlightCount++;
+  isTranslating = translationInFlightCount > 0;
+  const deliveredIds = new Set();
 
   try {
-    while (pendingElements.length > 0 && isTranslationEnabled) {
-      // 取出一批元素
-      const batch = pendingElements.splice(0, batchSize);
+    console.log(`[Page Copilot] Translating ${batch.texts.length} paragraphs`);
+    await translateTextsStream(batch.texts, config, (id, translatedText) => {
+      const element = batch.elementMap.get(id);
+      const sourceText = batch.texts.find((item) => item.id === id)?.text || '';
 
-      // 从 Set 中移除已取出的元素
-      batch.forEach(el => pendingElementsSet.delete(el));
-
-      // 过滤掉已经翻译的（可能在等待期间被翻译了）
-      const toTranslate = batch.filter(el => !translatedElementsSet.has(el));
-
-      if (toTranslate.length === 0) continue;
-
-      console.log(`[Page Copilot] Translating ${toTranslate.length} paragraphs`);
-
-      // 创建元素ID映射
-      const elementMap = new Map();
-      const texts = toTranslate.map((el, idx) => {
-        const id = `p${idx}`;
-        elementMap.set(id, el);
-        return { id, text: el.innerText.trim() };
-      });
-
-      try {
-        await translateTextsStream(texts, config, (id, translatedText) => {
-          const element = elementMap.get(id);
-          if (element && translatedText && !translatedElementsSet.has(element)) {
-            insertTranslation(element, translatedText);
-            translatedElementsSet.add(element);
-            translationStats.completed++;
-
-            // 更新进度
-            showTranslationProgress(
-              translationStats.completed,
-              translationStats.total,
-              modelName,
-              batchSize
-            );
-          }
-        });
-      } catch (error) {
-        console.error('[Page Copilot] Translation batch failed:', error);
-        // 继续处理队列
+      if (sourceText && translatedText) {
+        translationTextCache.set(sourceText, translatedText);
       }
-    }
+
+      if (translatedText) {
+        deliveredIds.add(id);
+      }
+      applyTranslationResult(element, translatedText, modelName, batch.batchSize);
+    });
+
+    batch.texts.forEach((item) => {
+      if (!deliveredIds.has(item.id)) {
+        retryOrSkipTranslationElement(
+          batch.elementMap.get(item.id),
+          `missing response for ${item.id}`,
+          modelName,
+          batch.batchSize
+        );
+      }
+    });
+  } catch (error) {
+    console.error('[Page Copilot] Translation batch failed:', error);
+    batch.texts.forEach((item) => {
+      retryOrSkipTranslationElement(
+        batch.elementMap.get(item.id),
+        error.message || 'batch failed',
+        modelName,
+        batch.batchSize
+      );
+    });
   } finally {
-    isTranslating = false;
-
-    // 检查是否还有新的待翻译元素（在翻译期间新加入的）
-    if (pendingElements.length > 0 && isTranslationEnabled) {
-      setTimeout(() => processTranslationQueue(), 100);
-    }
-
-    // 检查是否全部完成
-    if (translationStats.completed >= translationStats.total && isTranslationEnabled) {
-      showToast(`✅ Translation complete. ${translationStats.completed} paragraphs processed.`);
-      setTimeout(() => hideTranslationProgress(), 2000);
-    }
+    translationInFlightCount = Math.max(0, translationInFlightCount - 1);
+    isTranslating = translationInFlightCount > 0;
+    processTranslationQueue();
+    maybeFinishTranslation();
   }
+}
+
+// 处理翻译队列
+function processTranslationQueue() {
+  if (pendingElements.length === 0 || !isTranslationEnabled || !translationConfig) {
+    maybeFinishTranslation();
+    return;
+  }
+
+  const config = translationConfig;
+  const modelName = getModelDisplayName(config.model);
+
+  while (
+    translationInFlightCount < TRANSLATION_MAX_CONCURRENT_BATCHES
+    && pendingElements.length > 0
+    && isTranslationEnabled
+  ) {
+    const batch = collectNextTranslationBatch(config, modelName);
+    if (batch.texts.length === 0) break;
+    runTranslationBatch(batch, config, modelName);
+  }
+
+  maybeFinishTranslation();
 }
 
 // 移除翻译
@@ -1001,55 +1165,4 @@ function removeTranslations() {
   });
 
   showToast('🔄 Restored the original page content');
-}
-
-// 显示翻译进度
-function showTranslationProgress(completed, total, modelName, batchSize) {
-  let progressBar = document.querySelector('.ai-translation-progress');
-
-  if (!progressBar) {
-    progressBar = document.createElement('div');
-    progressBar.className = 'ai-translation-progress';
-    progressBar.innerHTML = `
-      <div class="progress-content">
-        <span class="progress-icon">🌍</span>
-        <span class="progress-text">Lazy translation in progress</span>
-        <span class="progress-count">${completed}/${total}</span>
-        <button class="progress-close" title="Stop translation">✕</button>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill"></div>
-        </div>
-        <div class="progress-model">Model: <strong>${modelName || '...'}</strong> | Scroll to translate progressively</div>
-      </div>
-    `;
-    document.body.appendChild(progressBar);
-
-    // 关闭按钮事件
-    progressBar.querySelector('.progress-close').addEventListener('click', () => {
-      stopPageTranslation();
-    });
-  }
-
-  const percent = Math.round((completed / total) * 100);
-  progressBar.querySelector('.progress-count').textContent = `${completed}/${total}`;
-  progressBar.querySelector('.progress-bar-fill').style.width = `${percent}%`;
-
-  // 更新文本状态
-  const textEl = progressBar.querySelector('.progress-text');
-  if (isTranslating) {
-    textEl.textContent = 'Translating...';
-  } else if (completed < total) {
-    textEl.textContent = 'Lazy translation in progress';
-  } else {
-    textEl.textContent = 'Translation complete';
-  }
-}
-
-// 隐藏翻译进度
-function hideTranslationProgress() {
-  const progressBar = document.querySelector('.ai-translation-progress');
-  if (progressBar) {
-    progressBar.classList.add('fade-out');
-    setTimeout(() => progressBar.remove(), 300);
-  }
 }

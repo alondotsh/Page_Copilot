@@ -112,6 +112,8 @@ let conversationHistory = [];
 let lastSummarySource = null;
 let lastTranscriptDownload = null;
 let currentProvider = 'claude';  // Currently selected provider
+let isPageTranslationEnabled = false;
+let translationStateRequestId = 0;
 let config = {
   apiKey: '',
   apiUrl: '',
@@ -187,6 +189,7 @@ async function init() {
   updateModelOptions();  // Refresh model options
   bindEvents();
   updateUIState();
+  await syncTranslatePageButtonState();
   console.log('[Page Copilot] Side panel initialized');
 }
 
@@ -429,6 +432,29 @@ function bindEvents() {
   elements.closeHistoryBtn.addEventListener('click', () => elements.historyPanel.classList.add('hidden'));
   elements.translatePageBtn.addEventListener('click', handleTranslatePage);
 
+  chrome.tabs.onActivated.addListener(() => {
+    syncTranslatePageButtonState();
+  });
+
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (!tab.active) return;
+
+    if (changeInfo.url || changeInfo.status === 'loading') {
+      updateTranslatePageButtonState(false);
+      return;
+    }
+
+    if (changeInfo.status === 'complete') {
+      syncTranslatePageButtonState();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      syncTranslatePageButtonState();
+    }
+  });
+
   elements.sendBtn.addEventListener('click', handleSend);
   elements.userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -465,11 +491,58 @@ function updateUIState() {
   elements.summarizeBtn.disabled = !hasApiKey;
   elements.translateBtn.disabled = !hasApiKey;
   elements.explainBtn.disabled = !hasApiKey;
+  elements.translatePageBtn.disabled = !hasApiKey;
   elements.sendBtn.disabled = !hasApiKey;
+  updateTranslatePageButtonState(false);
 
   if (!hasApiKey) {
     elements.settingsPanel.classList.remove('hidden');
     addSystemMessage('⚠️ Please configure your API key in Settings first', 'error');
+  }
+}
+
+/**
+ * Update the full-page translation button to reflect page translation state.
+ * @param {boolean} enabled Whether full-page translation is currently active.
+ */
+function updateTranslatePageButtonState(enabled) {
+  isPageTranslationEnabled = enabled;
+  elements.translatePageBtn.textContent = enabled ? '✅ Page Translated' : '🌍 Translate Entire Page';
+  elements.translatePageBtn.title = enabled ? 'Click again to restore the original page' : 'Translate the current page';
+}
+
+/**
+ * Query the content script for the current page's real translation state.
+ * @param {chrome.tabs.Tab} tab Current browser tab.
+ * @returns {Promise<boolean>} Whether the page is currently translated.
+ */
+async function queryPageTranslationState(tab) {
+  if (!tab?.id) return false;
+
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'getPageTranslationState' });
+    return !!response?.success && !!response.enabled;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Sync the full-page translation button with the active page.
+ */
+async function syncTranslatePageButtonState() {
+  const requestId = ++translationStateRequestId;
+
+  if (!config.apiKey) {
+    updateTranslatePageButtonState(false);
+    return;
+  }
+
+  const tab = await getCurrentTab();
+  const enabled = await queryPageTranslationState(tab);
+
+  if (requestId === translationStateRequestId) {
+    updateTranslatePageButtonState(enabled);
   }
 }
 
@@ -1103,16 +1176,44 @@ async function handleTranslate() {
 
 // Handle full-page translation
 async function handleTranslatePage() {
+  await syncTranslatePageButtonState();
+
   const tab = await getCurrentTab();
   if (!tab) {
     addSystemMessage('❌ Unable to access the current page', 'error');
     return;
   }
 
+  const applyTranslatePageResult = (response) => {
+    if (!response?.success) {
+      addSystemMessage(`❌ Translation failed: ${response?.error || 'unknown error'}`, 'error');
+      return;
+    }
+
+    if (response.mode === 'enabled') {
+      updateTranslatePageButtonState(true);
+      addSystemMessage('✅ Page translation enabled. Scroll the webpage to translate more content.');
+      return;
+    }
+
+    if (response.mode === 'restored') {
+      updateTranslatePageButtonState(false);
+      addSystemMessage('🔄 Restored the original page content.');
+      return;
+    }
+
+    if (response.mode === 'empty') {
+      updateTranslatePageButtonState(false);
+      addSystemMessage('⚠️ No translatable content was found on this page', 'error');
+      return;
+    }
+
+    updateTranslatePageButtonState(false);
+  };
+
   try {
-    // Try sending the message first
-    await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
-    addSystemMessage('🌍 Translating the page now. Check the webpage for progress.');
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
+    applyTranslatePageResult(response);
   } catch (error) {
     // If this fails, the content script may be missing; inject it and retry
     console.log('[Page Copilot] Content script missing, attempting injection...');
@@ -1128,8 +1229,8 @@ async function handleTranslatePage() {
       // Wait for the script to load
       await new Promise(resolve => setTimeout(resolve, 100));
       // Retry the message
-      await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
-      addSystemMessage('🌍 Translating the page now. Check the webpage for progress.');
+      const response = await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
+      applyTranslatePageResult(response);
     } catch (retryError) {
       console.error('[Page Copilot] Translation failed:', retryError);
       addSystemMessage('❌ Translation failed. Refresh the page and try again.', 'error');
