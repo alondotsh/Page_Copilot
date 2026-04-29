@@ -101,11 +101,11 @@ const MODEL_CONFIG = {
     models: {
       chat: [
         { value: 'glm-4.7', label: 'GLM-4.7 (recommended)' },
-        { value: 'glm-4.5-air', label: 'GLM-4.5 Air (fast)' }
+        { value: 'glm-4.7-flash', label: 'GLM-4.7 Flash (fast)' }
       ],
       translate: [
         { value: 'glm-4.7', label: 'GLM-4.7' },
-        { value: 'glm-4.5-air', label: 'GLM-4.5 Air (fast)' }
+        { value: 'glm-4.7-flash', label: 'GLM-4.7 Flash (fast)' }
       ]
     }
   },
@@ -154,16 +154,16 @@ const MODEL_CONFIG = {
     name: 'xAI Grok',
     apiFormat: 'openai',
     defaultUrl: 'https://api.x.ai/v1',
-    defaultModel: 'grok-4.20',
-    defaultTranslateModel: 'grok-4.20',
+    defaultModel: 'grok-4-1-fast-non-reasoning',
+    defaultTranslateModel: 'grok-4-1-fast-non-reasoning',
     models: {
       chat: [
-        { value: 'grok-4.20', label: 'Grok 4.20 (recommended)' },
-        { value: 'grok-4.20-reasoning', label: 'Grok 4.20 Reasoning' }
+        { value: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast Non-Reasoning (recommended, best value)' },
+        { value: 'grok-4-1-fast-reasoning', label: 'Grok 4.1 Fast Reasoning' }
       ],
       translate: [
-        { value: 'grok-4.20', label: 'Grok 4.20 (recommended)' },
-        { value: 'grok-4.20-reasoning', label: 'Grok 4.20 Reasoning' }
+        { value: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast Non-Reasoning (recommended, best value)' },
+        { value: 'grok-4-1-fast-reasoning', label: 'Grok 4.1 Fast Reasoning' }
       ]
     }
   },
@@ -333,15 +333,11 @@ const MODEL_CONFIG = {
 const PROVIDER_GROUPS = [
   {
     label: 'Global providers',
-    providers: ['claude', 'openai', 'gemini', 'grok']
+    providers: ['grok']
   },
   {
     label: 'China providers',
-    providers: ['glm', 'deepseek', 'qwen', 'kimi', 'minimax', 'mimo']
-  },
-  {
-    label: 'Gateways',
-    providers: ['openrouter', 'siliconflow']
+    providers: ['glm']
   },
   {
     label: 'Custom',
@@ -349,12 +345,15 @@ const PROVIDER_GROUPS = [
   }
 ];
 
+const DEFAULT_PROVIDER = 'glm';
+const VISIBLE_PROVIDERS = new Set(PROVIDER_GROUPS.flatMap(group => group.providers));
+
 // Global state
 let conversationHistory = [];
 let lastSummarySource = null;
 let lastTranscriptDownload = null;
 let lastVideoTranscriptDiagnostic = null;
-let currentProvider = 'claude';  // Currently selected provider
+let currentProvider = DEFAULT_PROVIDER;  // Currently selected provider
 let isPageTranslationEnabled = false;
 let translationStateRequestId = 0;
 let modelInputFocusValue = '';
@@ -396,7 +395,7 @@ function buildRuntimeConfig(providerConfig) {
  * @returns {object} Default provider settings.
  */
 function buildDefaultProviderConfig(provider) {
-  const providerSpec = MODEL_CONFIG[provider] || MODEL_CONFIG.claude;
+  const providerSpec = MODEL_CONFIG[provider] || MODEL_CONFIG[DEFAULT_PROVIDER];
   return {
     apiKey: '',
     apiUrl: providerSpec.defaultUrl,
@@ -404,6 +403,15 @@ function buildDefaultProviderConfig(provider) {
     model: providerSpec.defaultModel,
     translateModel: providerSpec.defaultTranslateModel
   };
+}
+
+/**
+ * Check whether a provider should be exposed in the settings UI.
+ * @param {string} provider Provider id.
+ * @returns {boolean} Whether the provider is visible.
+ */
+function isVisibleProvider(provider) {
+  return VISIBLE_PROVIDERS.has(provider) && !!MODEL_CONFIG[provider];
 }
 
 // Per-provider configuration store
@@ -425,6 +433,9 @@ function cloneProviderConfigs(source) {
 
 const LEGACY_MODEL_MIGRATIONS = {
   'claude-3-5-haiku-20241022': 'claude-haiku-4-5',
+  'glm-4.5-air': 'glm-4.7-flash',
+  'grok-4.20': 'grok-4-1-fast-non-reasoning',
+  'grok-4.20-reasoning': 'grok-4-1-fast-reasoning',
   'deepseek-chat': 'deepseek-v4-flash',
   'deepseek-reasoner': 'deepseek-v4-flash',
   'qwen-plus': 'qwen3.6-plus',
@@ -461,6 +472,7 @@ const elements = {
   settingsBtn: document.getElementById('settingsBtn'),
   settingsPanel: document.getElementById('settingsPanel'),
   apiProvider: document.getElementById('apiProvider'),
+  customProviderHint: document.getElementById('customProviderHint'),
   apiKey: document.getElementById('apiKey'),
   toggleApiKeyVisibility: document.getElementById('toggleApiKeyVisibility'),
   apiUrl: document.getElementById('apiUrl'),
@@ -509,7 +521,7 @@ function updateProviderOptions() {
   elements.apiProvider.innerHTML = PROVIDER_GROUPS
     .map((group) => {
       const options = group.providers
-        .filter((provider) => MODEL_CONFIG[provider])
+        .filter(isVisibleProvider)
         .map((provider) => `<option value="${provider}">${MODEL_CONFIG[provider].name}</option>`)
         .join('');
       return `<optgroup label="${group.label}">${options}</optgroup>`;
@@ -533,11 +545,19 @@ function updateModelOptions() {
 }
 
 /**
+ * Update helper text that only applies to custom providers.
+ */
+function updateCustomProviderHint() {
+  const isCustomProvider = currentProvider === 'customOpenAI' || currentProvider === 'customAnthropic';
+  elements.customProviderHint.classList.toggle('hidden', !isCustomProvider);
+}
+
+/**
  * Switch the active provider and persist the provider choice only.
  * @param {string} provider Provider id.
  */
 async function switchProvider(provider) {
-  if (!MODEL_CONFIG[provider]) return;
+  if (!isVisibleProvider(provider)) return;
 
   // Keep unsaved edits in memory only so switching back does not lose form state.
   providerDraftConfigs[currentProvider] = {
@@ -581,6 +601,7 @@ async function switchProvider(provider) {
   // Re-apply selected models
   elements.model.value = config.model || '';
   elements.translateModel.value = config.translateModel || '';
+  updateCustomProviderHint();
 
   console.log('[Page Copilot] Switched provider:', provider);
 }
@@ -597,7 +618,7 @@ async function loadConfig() {
     ]);
 
     // Load current provider
-    currentProvider = MODEL_CONFIG[result.currentProvider] ? result.currentProvider : 'claude';
+    currentProvider = isVisibleProvider(result.currentProvider) ? result.currentProvider : DEFAULT_PROVIDER;
     let configChanged = false;
 
     if (result.globalSettings) {
@@ -666,6 +687,7 @@ async function loadConfig() {
     elements.systemPrompt.value = globalSettings.systemPrompt || '';
     elements.contextPageCount.value = globalSettings.contextPageCount?.toString() || '10';
     elements.retentionHours.value = globalSettings.retentionHours?.toString() || '48';
+    updateCustomProviderHint();
 
     updateAPIStatus();
   } catch (error) {

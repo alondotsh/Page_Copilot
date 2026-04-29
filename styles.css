@@ -187,6 +187,10 @@ body {
   font-size: 11px;
 }
 
+.form-group .custom-provider-hint {
+  color: #4b5563;
+}
+
 /* 快捷操作 */
 .quick-actions {
   display: grid;
