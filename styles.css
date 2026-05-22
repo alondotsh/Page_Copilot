@@ -525,34 +525,15 @@ body {
 }
 
 .feedback-card {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
   margin-top: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  border-radius: 8px;
+  background: #f8fafc;
   border: 1px solid #dbeafe;
 }
 
-.feedback-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.feedback-copy p {
+.feedback-card p {
   margin: 2px 0;
-}
-
-.feedback-qr {
-  width: 72px;
-  height: 72px;
-  border-radius: 10px;
-  border: 1px solid #bfdbfe;
-  object-fit: cover;
-  background: white;
-  flex-shrink: 0;
 }
 
 .hidden {

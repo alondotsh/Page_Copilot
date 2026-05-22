@@ -1,5 +1,7 @@
 // Background Service Worker - streaming support and page visit history
 
+importScripts('pdf-extractor.js');
+
 console.log('[Page Copilot] Background service worker started');
 
 // ==================== 页面访问记录功能 ====================
@@ -286,6 +288,18 @@ ${text}`;
           });
         } catch (error) {
           console.error('[Page Copilot] Failed to fetch text resource:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      break;
+
+    case 'extractPdfContent':
+      (async () => {
+        try {
+          const pdfContent = await extractPdfContent(request.url);
+          sendResponse({ success: true, data: pdfContent });
+        } catch (error) {
+          console.error('[Page Copilot] Failed to extract PDF content:', error);
           sendResponse({ success: false, error: error.message });
         }
       })();

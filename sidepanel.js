@@ -1130,6 +1130,22 @@ async function getPageContent() {
   const tab = await getCurrentTab();
   if (!tab?.id) return null;
 
+  const readPdfContent = async () => {
+    if (!isPdfUrl(tab.url || '')) return null;
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'extractPdfContent',
+      url: tab.url
+    });
+
+    if (!response?.success) {
+      console.warn('[Page Copilot] PDF extraction failed:', response?.error);
+      return null;
+    }
+
+    return response.data || null;
+  };
+
   const isSupportedVideoPage = isSupportedVideoUrl(tab?.url || '');
   lastVideoTranscriptDiagnostic = null;
   const videoTranscript = await getVideoTranscriptContent(tab);
@@ -1151,6 +1167,10 @@ async function getPageContent() {
 
   try {
     const pageContent = await readPageContent();
+    if (!pageContent?.text) {
+      const pdfContent = await readPdfContent();
+      if (pdfContent) return pdfContent;
+    }
     if (pageContent && isSupportedVideoPage) {
       pageContent.videoTranscriptStatus = 'unavailable';
       pageContent.videoTranscriptDiagnostic = lastVideoTranscriptDiagnostic;
@@ -1163,6 +1183,10 @@ async function getPageContent() {
   try {
     await injectPageScripts(tab.id);
     const pageContent = await readPageContent();
+    if (!pageContent?.text) {
+      const pdfContent = await readPdfContent();
+      if (pdfContent) return pdfContent;
+    }
     if (pageContent && isSupportedVideoPage) {
       pageContent.videoTranscriptStatus = 'unavailable';
       pageContent.videoTranscriptDiagnostic = lastVideoTranscriptDiagnostic;
@@ -1170,7 +1194,22 @@ async function getPageContent() {
     return pageContent;
   } catch (error) {
     console.warn('[Page Copilot] Failed to read page content after script injection:', error);
-    return null;
+    return readPdfContent();
+  }
+}
+
+/**
+ * Check whether a tab URL points to a PDF document.
+ * @param {string} url Current tab URL.
+ * @returns {boolean} Whether the URL appears to be a PDF.
+ */
+function isPdfUrl(url) {
+  try {
+    const parsedUrl = new URL(url);
+    return ['http:', 'https:'].includes(parsedUrl.protocol)
+      && /\.pdf(?:$|[?#])/i.test(parsedUrl.pathname + parsedUrl.search + parsedUrl.hash);
+  } catch (error) {
+    return false;
   }
 }
 
@@ -1739,6 +1778,8 @@ async function handleSummarize() {
   if (text.length > 10000) text = text.substring(0, 10000) + '\n\n[Content too long, truncated...]';
   const contentLabel = pageContent.contentType === 'videoTranscript'
     ? `${pageContent.sourceName || 'video transcript'}`
+    : pageContent.contentType === 'pdfText'
+      ? 'PDF document'
     : 'webpage';
   const prompt = `Please summarize the following ${contentLabel}.\n\nPage title: ${pageContent.title}\n\nContent:\n${text}\n\nSummarize the main ideas, key details, and notable takeaways. Respect any higher-priority custom instructions for the response language. If no language preference is provided, respond in English.`;
   await saveLastSummarySource({

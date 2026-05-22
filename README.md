@@ -19,6 +19,7 @@ The extension is open-source, local-first, built on Manifest V3, and works with 
 
 - **Cross-page comparison**: compare recently visited articles, products, viewpoints, or options
 - **Page summaries and follow-up Q&A**: extract the key ideas from the current page and keep asking grounded questions
+- **PDF summaries**: summarize text-based PDFs opened directly in Chrome
 - **Video transcript summaries**: summarize YouTube captions and Bilibili subtitles, including readable AI subtitles when the page/account exposes them, with a timed-transcript download option
 - **Translate / explain selected text**: work on a specific passage without leaving the page
 - **Floating toolbar**: copy, translate, ask, or export selected text to PDF directly from the webpage
@@ -91,6 +92,7 @@ Page_Copilot/
 - **Built-in providers**: Zhipu GLM, xAI Grok, Custom OpenAI-compatible, and Custom Anthropic-compatible
 - **Provider testing**: GLM and Grok are the currently tested presets. Other providers can often be used through custom compatible endpoints.
 - **Provider requests**: new presets can be added after confirmed user testing. If you want a provider added, please open an issue with the provider name, API base URL, model IDs, compatibility format, and reproducible test results. If you are willing to provide a temporary test API key, contact privately; never post API keys publicly.
+- **PDF support**: text-based PDFs can be summarized and used for follow-up questions. Scanned or image-only PDFs are not supported, and page references may be approximate; use the original PDF for exact page numbers.
 - **Markdown rendering**: lightweight custom renderer with no external dependency, compatible with extension CSP
 
 ## 📚 Documentation
